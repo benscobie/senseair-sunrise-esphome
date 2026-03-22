@@ -1,5 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
+from esphome import automation
 from esphome.components import i2c, sensor
 from esphome.const import (
     CONF_CO2,
@@ -43,6 +44,37 @@ CONFIG_SCHEMA = (
     .extend(cv.polling_component_schema("60s"))
     .extend(i2c.i2c_device_schema(0x68))
 )
+
+
+BackgroundCalibrationAction = senseair_sunrise_ns.class_(
+    "BackgroundCalibrationAction", automation.Action
+)
+ABCEnableAction = senseair_sunrise_ns.class_("ABCEnableAction", automation.Action)
+ABCDisableAction = senseair_sunrise_ns.class_("ABCDisableAction", automation.Action)
+
+SENSEAIR_SUNRISE_ACTION_SCHEMA = automation.maybe_simple_id(
+    {cv.GenerateID(): cv.use_id(SenseairSunriseComponent)}
+)
+
+
+@automation.register_action(
+    "senseair_sunrise.background_calibration",
+    BackgroundCalibrationAction,
+    SENSEAIR_SUNRISE_ACTION_SCHEMA,
+)
+@automation.register_action(
+    "senseair_sunrise.abc_enable",
+    ABCEnableAction,
+    SENSEAIR_SUNRISE_ACTION_SCHEMA,
+)
+@automation.register_action(
+    "senseair_sunrise.abc_disable",
+    ABCDisableAction,
+    SENSEAIR_SUNRISE_ACTION_SCHEMA,
+)
+async def senseair_sunrise_action_to_code(config, action_id, template_arg, args):
+    parent = await cg.get_variable(config[CONF_ID])
+    return cg.new_Pvariable(action_id, template_arg, parent)
 
 
 async def to_code(config):

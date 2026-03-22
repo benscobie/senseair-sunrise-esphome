@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "esphome/core/automation.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/i2c/i2c.h"
 
@@ -17,6 +18,10 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_co2_sensor(sensor::Sensor *co2_sensor) { this->co2_sensor_ = co2_sensor; }
   void set_temperature_sensor(sensor::Sensor *s) { this->temperature_sensor_ = s; }
 
+  void background_calibration();
+  void abc_enable();
+  void abc_disable();
+
  protected:
   bool wake_up_();
   bool read_register_(uint8_t reg, uint8_t *data, size_t len);
@@ -24,6 +29,33 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
 
   sensor::Sensor *co2_sensor_{nullptr};
   sensor::Sensor *temperature_sensor_{nullptr};
+};
+
+template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...> {
+ public:
+  BackgroundCalibrationAction(SenseairSunriseComponent *parent) : parent_(parent) {}
+  void play(Ts... x) override { this->parent_->background_calibration(); }
+
+ protected:
+  SenseairSunriseComponent *parent_;
+};
+
+template<typename... Ts> class ABCEnableAction : public Action<Ts...> {
+ public:
+  ABCEnableAction(SenseairSunriseComponent *parent) : parent_(parent) {}
+  void play(Ts... x) override { this->parent_->abc_enable(); }
+
+ protected:
+  SenseairSunriseComponent *parent_;
+};
+
+template<typename... Ts> class ABCDisableAction : public Action<Ts...> {
+ public:
+  ABCDisableAction(SenseairSunriseComponent *parent) : parent_(parent) {}
+  void play(Ts... x) override { this->parent_->abc_disable(); }
+
+ protected:
+  SenseairSunriseComponent *parent_;
 };
 
 }  // namespace senseair_sunrise

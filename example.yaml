@@ -17,8 +17,26 @@ i2c:
 
 sensor:
   - platform: senseair_sunrise
+    id: my_sunrise
     co2:
       name: "CO2"
     temperature:
       name: "Sensor Temperature"
     update_interval: 60s
+
+button:
+  - platform: template
+    name: "Background Calibration"
+    on_press:
+      - senseair_sunrise.background_calibration:
+          id: my_sunrise
+  - platform: template
+    name: "Enable ABC"
+    on_press:
+      - senseair_sunrise.abc_enable:
+          id: my_sunrise
+  - platform: template
+    name: "Disable ABC"
+    on_press:
+      - senseair_sunrise.abc_disable:
+          id: my_sunrise

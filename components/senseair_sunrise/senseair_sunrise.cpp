@@ -176,5 +176,48 @@ void SenseairSunriseComponent::dump_config() {
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
 }
 
+void SenseairSunriseComponent::background_calibration() {
+  ESP_LOGI(TAG, "Initiating background calibration...");
+  this->wake_up_();
+  uint8_t cmd[2] = {0x7C, 0x06};
+  if (!this->write_register_(0x82, cmd, 2)) {
+    ESP_LOGE(TAG, "Failed to send background calibration command");
+    return;
+  }
+  ESP_LOGI(TAG, "Background calibration command sent");
+}
+
+void SenseairSunriseComponent::abc_enable() {
+  ESP_LOGI(TAG, "Enabling ABC...");
+  this->wake_up_();
+  uint8_t meter_control;
+  if (!this->read_register_(0xA5, &meter_control, 1)) {
+    ESP_LOGE(TAG, "Failed to read MeterControl register");
+    return;
+  }
+  meter_control &= ~0x02;
+  if (!this->write_register_(0xA5, &meter_control, 1)) {
+    ESP_LOGE(TAG, "Failed to write MeterControl register");
+    return;
+  }
+  ESP_LOGI(TAG, "ABC enabled");
+}
+
+void SenseairSunriseComponent::abc_disable() {
+  ESP_LOGI(TAG, "Disabling ABC...");
+  this->wake_up_();
+  uint8_t meter_control;
+  if (!this->read_register_(0xA5, &meter_control, 1)) {
+    ESP_LOGE(TAG, "Failed to read MeterControl register");
+    return;
+  }
+  meter_control |= 0x02;
+  if (!this->write_register_(0xA5, &meter_control, 1)) {
+    ESP_LOGE(TAG, "Failed to write MeterControl register");
+    return;
+  }
+  ESP_LOGI(TAG, "ABC disabled");
+}
+
 }  // namespace senseair_sunrise
 }  // namespace esphome
