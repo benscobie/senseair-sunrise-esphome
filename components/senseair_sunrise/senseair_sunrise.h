@@ -16,7 +16,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   float get_setup_priority() const override { return setup_priority::DATA; }
 
   void set_co2_sensor(sensor::Sensor *co2_sensor) { this->co2_sensor_ = co2_sensor; }
-  void set_temperature_sensor(sensor::Sensor *s) { this->temperature_sensor_ = s; }
+  void set_temperature_sensor(sensor::Sensor *temperature_sensor) { this->temperature_sensor_ = temperature_sensor; }
 
   void background_calibration();
   void abc_enable();
@@ -34,7 +34,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
 template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...> {
  public:
   BackgroundCalibrationAction(SenseairSunriseComponent *parent) : parent_(parent) {}
-  void play(Ts... x) override { this->parent_->background_calibration(); }
+  void play(const Ts &...x) override { this->parent_->background_calibration(); }
 
  protected:
   SenseairSunriseComponent *parent_;
@@ -43,7 +43,7 @@ template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...
 template<typename... Ts> class ABCEnableAction : public Action<Ts...> {
  public:
   ABCEnableAction(SenseairSunriseComponent *parent) : parent_(parent) {}
-  void play(Ts... x) override { this->parent_->abc_enable(); }
+  void play(const Ts &...x) override { this->parent_->abc_enable(); }
 
  protected:
   SenseairSunriseComponent *parent_;
@@ -52,7 +52,7 @@ template<typename... Ts> class ABCEnableAction : public Action<Ts...> {
 template<typename... Ts> class ABCDisableAction : public Action<Ts...> {
  public:
   ABCDisableAction(SenseairSunriseComponent *parent) : parent_(parent) {}
-  void play(Ts... x) override { this->parent_->abc_disable(); }
+  void play(const Ts &...x) override { this->parent_->abc_disable(); }
 
  protected:
   SenseairSunriseComponent *parent_;
