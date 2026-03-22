@@ -85,15 +85,67 @@ void SenseairSunriseComponent::update() {
     return;
   }
 
-  // Parse error status
-  uint16_t error_status = ((uint16_t) data[0] << 8) | data[1];
-  if (error_status & 0x0080) {
-    // Bit 7 of LSB: no measurement completed yet
+  // Parse error status (MSB = data[0], LSB = data[1])
+  uint8_t error_msb = data[0];
+  uint8_t error_lsb = data[1];
+  bool skip_reading = false;
+
+  // LSB bit 7: No measurement completed (normal at startup)
+  if (error_lsb & 0x80) {
     ESP_LOGD(TAG, "No measurement completed yet, skipping");
     return;
   }
-  if (error_status != 0) {
-    ESP_LOGW(TAG, "Sensor error status: 0x%04X", error_status);
+
+  // MSB bit 0: Low internal regulated voltage
+  if (error_msb & 0x01) {
+    ESP_LOGE(TAG, "Low internal regulated voltage - check power supply");
+    skip_reading = true;
+  }
+  // MSB bit 1: Measurement timeout
+  if (error_msb & 0x02) {
+    ESP_LOGW(TAG, "Measurement timeout");
+    skip_reading = true;
+  }
+  // MSB bit 2: Abnormal signal level
+  if (error_msb & 0x04) {
+    ESP_LOGW(TAG, "Abnormal signal level detected");
+    skip_reading = true;
+  }
+
+  // LSB bit 0: Fatal error
+  if (error_lsb & 0x01) {
+    ESP_LOGE(TAG, "Fatal error - sensor initialization failed");
+    skip_reading = true;
+  }
+  // LSB bit 1: I2C error
+  if (error_lsb & 0x02) {
+    ESP_LOGE(TAG, "I2C communication error reported by sensor");
+  }
+  // LSB bit 2: Algorithm error
+  if (error_lsb & 0x04) {
+    ESP_LOGE(TAG, "Algorithm error - corrupt parameters");
+  }
+  // LSB bit 3: Calibration error
+  if (error_lsb & 0x08) {
+    ESP_LOGW(TAG, "Calibration error");
+  }
+  // LSB bit 4: Self-diagnostics error
+  if (error_lsb & 0x10) {
+    ESP_LOGE(TAG, "Self-diagnostics error");
+  }
+  // LSB bit 5: Out of range
+  if (error_lsb & 0x20) {
+    ESP_LOGW(TAG, "Measurement out of range");
+    // Still publish -- reading may be approximate
+  }
+  // LSB bit 6: Memory error
+  if (error_lsb & 0x40) {
+    ESP_LOGE(TAG, "Memory error");
+  }
+
+  if (skip_reading) {
+    this->status_set_warning("Sensor error");
+    return;
   }
 
   // Parse CO2 (signed 16-bit, registers 0x06-0x07)
