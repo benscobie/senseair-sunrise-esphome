@@ -106,6 +106,13 @@ void SenseairSunriseComponent::update() {
     this->co2_sensor_->publish_state(co2_raw);
   }
 
+  // Parse temperature (signed 16-bit, registers 0x08-0x09, unit = degC * 100)
+  if (this->temperature_sensor_ != nullptr) {
+    int16_t temp_raw = ((int16_t) data[8] << 8) | data[9];
+    float temperature = temp_raw / 100.0f;
+    this->temperature_sensor_->publish_state(temperature);
+  }
+
   this->status_clear_warning();
 }
 
@@ -114,6 +121,7 @@ void SenseairSunriseComponent::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   LOG_SENSOR("  ", "CO2", this->co2_sensor_);
+  LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
 }
 
 }  // namespace senseair_sunrise

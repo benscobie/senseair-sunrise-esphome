@@ -4,8 +4,11 @@ from esphome.components import i2c, sensor
 from esphome.const import (
     CONF_CO2,
     CONF_ID,
+    CONF_TEMPERATURE,
     DEVICE_CLASS_CARBON_DIOXIDE,
+    DEVICE_CLASS_TEMPERATURE,
     STATE_CLASS_MEASUREMENT,
+    UNIT_CELSIUS,
     UNIT_PARTS_PER_MILLION,
     ICON_MOLECULE_CO2,
 )
@@ -29,6 +32,12 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_CARBON_DIOXIDE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
+            cv.Optional(CONF_TEMPERATURE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
         }
     )
     .extend(cv.polling_component_schema("60s"))
@@ -44,3 +53,7 @@ async def to_code(config):
     if co2_config := config.get(CONF_CO2):
         sens = await sensor.new_sensor(co2_config)
         cg.add(var.set_co2_sensor(sens))
+
+    if temp_config := config.get(CONF_TEMPERATURE):
+        sens = await sensor.new_sensor(temp_config)
+        cg.add(var.set_temperature_sensor(sens))

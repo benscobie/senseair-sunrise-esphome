@@ -19,4 +19,6 @@ sensor:
   - platform: senseair_sunrise
     co2:
       name: "CO2"
+    temperature:
+      name: "Sensor Temperature"
     update_interval: 60s

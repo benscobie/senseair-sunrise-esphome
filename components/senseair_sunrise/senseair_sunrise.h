@@ -15,6 +15,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   float get_setup_priority() const override { return setup_priority::DATA; }
 
   void set_co2_sensor(sensor::Sensor *co2_sensor) { this->co2_sensor_ = co2_sensor; }
+  void set_temperature_sensor(sensor::Sensor *s) { this->temperature_sensor_ = s; }
 
  protected:
   bool wake_up_();
@@ -22,6 +23,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   bool write_register_(uint8_t reg, const uint8_t *data, size_t len);
 
   sensor::Sensor *co2_sensor_{nullptr};
+  sensor::Sensor *temperature_sensor_{nullptr};
 };
 
 }  // namespace senseair_sunrise
