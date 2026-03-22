@@ -98,7 +98,11 @@ void SenseairSunriseComponent::update() {
 
   // Parse CO2 (signed 16-bit, registers 0x06-0x07)
   int16_t co2_raw = ((int16_t) data[6] << 8) | data[7];
-  if (co2_raw >= 0 && this->co2_sensor_ != nullptr) {
+  if (co2_raw < 0) {
+    ESP_LOGW(TAG, "CO2 reading is negative (%d), skipping", co2_raw);
+    return;
+  }
+  if (this->co2_sensor_ != nullptr) {
     this->co2_sensor_->publish_state(co2_raw);
   }
 
