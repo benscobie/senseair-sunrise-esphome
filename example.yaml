@@ -1,8 +1,8 @@
 esphome:
   name: sunrise-test
 
-esp32:
-  board: esp32dev
+esp8266:
+  board: d1_mini
 
 external_components:
   - source:
@@ -12,8 +12,8 @@ external_components:
 logger:
 
 i2c:
-  sda: GPIO21
-  scl: GPIO22
+  sda: D2
+  scl: D1
 
 sensor:
   - platform: senseair_sunrise
