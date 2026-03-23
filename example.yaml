@@ -1,3 +1,19 @@
+# Senseair Sunrise CO2 sensor - ESPHome example config
+#
+# Wiring (ESP8266 D1 Mini → Sunrise):
+#   D1 Mini 3V3  → Pin 2 (VBB), Pin 3 (VDDIO), Pin 9 (EN)
+#   D1 Mini GND  → Pin 1 (GND), Pin 6 (COMSEL, selects I2C mode)
+#   D1 Mini D2   → Pin 4 (SDA)
+#   D1 Mini D1   → Pin 5 (SCL)
+#   Leave floating: Pin 7 (nRDY), Pin 8 (DVCC)
+#
+# For ESP32, change the board and I2C pins:
+#   esp32:
+#     board: esp32dev
+#   i2c:
+#     sda: GPIO21
+#     scl: GPIO22
+
 esphome:
   name: sunrise-test
 
@@ -22,6 +38,7 @@ sensor:
       name: "CO2"
     temperature:
       name: "Sensor Temperature"
+    # measurement_mode: continuous  # default; set to "single" for battery use (not yet supported)
     update_interval: 60s
 
 button:
