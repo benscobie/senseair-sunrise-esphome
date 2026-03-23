@@ -84,11 +84,6 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  if (this->measurement_mode_ == 1) {
-    ESP_LOGE(TAG, "Single measurement mode is not yet supported");
-    this->mark_failed();
-    return;
-  }
 }
 
 void SenseairSunriseComponent::update() {

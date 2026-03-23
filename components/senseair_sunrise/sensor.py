@@ -21,7 +21,6 @@ CONF_MEASUREMENT_MODE = "measurement_mode"
 
 MEASUREMENT_MODES = {
     "continuous": 0,
-    "single": 1,
 }
 
 senseair_sunrise_ns = cg.esphome_ns.namespace("senseair_sunrise")
