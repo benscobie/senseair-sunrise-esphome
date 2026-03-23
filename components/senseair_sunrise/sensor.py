@@ -17,6 +17,13 @@ from esphome.const import (
 CODEOWNERS = []
 DEPENDENCIES = ["i2c"]
 
+CONF_MEASUREMENT_MODE = "measurement_mode"
+
+MEASUREMENT_MODES = {
+    "continuous": 0,
+    "single": 1,
+}
+
 senseair_sunrise_ns = cg.esphome_ns.namespace("senseair_sunrise")
 SenseairSunriseComponent = senseair_sunrise_ns.class_(
     "SenseairSunriseComponent", cg.PollingComponent, i2c.I2CDevice
@@ -26,6 +33,9 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(SenseairSunriseComponent),
+            cv.Optional(CONF_MEASUREMENT_MODE, default="continuous"): cv.enum(
+                MEASUREMENT_MODES, lower=True
+            ),
             cv.Optional(CONF_CO2): sensor.sensor_schema(
                 unit_of_measurement=UNIT_PARTS_PER_MILLION,
                 icon=ICON_MOLECULE_CO2,
@@ -81,6 +91,8 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
+
+    cg.add(var.set_measurement_mode(config[CONF_MEASUREMENT_MODE]))
 
     if co2_config := config.get(CONF_CO2):
         sens = await sensor.new_sensor(co2_config)

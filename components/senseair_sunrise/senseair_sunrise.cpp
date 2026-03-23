@@ -62,11 +62,32 @@ void SenseairSunriseComponent::setup() {
   }
 
   // Read sensor ID (registers 0x3A-0x3D)
+  this->wake_up_();
   uint8_t id_data[4];
   if (this->read_register_(0x3A, id_data, 4)) {
     uint32_t sensor_id = ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) |
                          ((uint32_t) id_data[2] << 8) | id_data[3];
     ESP_LOGI(TAG, "Sensor ID: %u", sensor_id);
+  }
+
+  // Check and sync measurement mode with config
+  this->wake_up_();
+  uint8_t meas_mode;
+  if (this->read_register_(0x95, &meas_mode, 1)) {
+    if (meas_mode != this->measurement_mode_) {
+      ESP_LOGW(TAG, "Sensor measurement mode (%d) differs from configured mode (%d), updating sensor EEPROM",
+               meas_mode, this->measurement_mode_);
+      this->wake_up_();
+      if (!this->write_register_(0x95, &this->measurement_mode_, 1)) {
+        ESP_LOGE(TAG, "Failed to set measurement mode");
+      }
+    }
+  }
+
+  if (this->measurement_mode_ == 1) {
+    ESP_LOGE(TAG, "Single measurement mode is not yet supported");
+    this->mark_failed();
+    return;
   }
 }
 

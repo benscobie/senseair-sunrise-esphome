@@ -18,6 +18,8 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_co2_sensor(sensor::Sensor *co2_sensor) { this->co2_sensor_ = co2_sensor; }
   void set_temperature_sensor(sensor::Sensor *temperature_sensor) { this->temperature_sensor_ = temperature_sensor; }
 
+  void set_measurement_mode(uint8_t mode) { this->measurement_mode_ = mode; }
+
   void background_calibration();
   void abc_enable();
   void abc_disable();
@@ -29,6 +31,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
 
   sensor::Sensor *co2_sensor_{nullptr};
   sensor::Sensor *temperature_sensor_{nullptr};
+  uint8_t measurement_mode_{0};
 };
 
 template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...> {
