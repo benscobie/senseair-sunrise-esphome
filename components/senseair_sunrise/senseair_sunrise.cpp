@@ -76,6 +76,10 @@ bool SenseairSunriseComponent::trigger_single_measurement_() {
 void SenseairSunriseComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Senseair Sunrise...");
 
+  if (this->nrdy_pin_ != nullptr) {
+    this->nrdy_pin_->setup();
+  }
+
   this->wake_up_();
 
   // Read firmware revision (registers 0x38-0x39)
@@ -127,18 +131,20 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Sync measurement period (register 0x96-0x97, uint16 seconds)
-  this->wake_up_();
-  uint8_t period_data[2];
-  if (this->read_register_(0x96, period_data, 2)) {
-    uint16_t current = (uint16_t(period_data[0]) << 8) | period_data[1];
-    if (current != this->measurement_period_) {
-      ESP_LOGI(TAG, "Updating measurement period: %us -> %us", current, this->measurement_period_);
-      period_data[0] = this->measurement_period_ >> 8;
-      period_data[1] = this->measurement_period_ & 0xFF;
-      this->wake_up_();
-      if (!this->write_register_(0x96, period_data, 2)) {
-        ESP_LOGE(TAG, "Failed to set measurement period");
+  if (this->measurement_mode_ == 0) {
+    // Sync measurement period (register 0x96-0x97, uint16 seconds) — continuous mode only
+    this->wake_up_();
+    uint8_t period_data[2];
+    if (this->read_register_(0x96, period_data, 2)) {
+      uint16_t current = (uint16_t(period_data[0]) << 8) | period_data[1];
+      if (current != this->measurement_period_) {
+        ESP_LOGI(TAG, "Updating measurement period: %us -> %us", current, this->measurement_period_);
+        period_data[0] = this->measurement_period_ >> 8;
+        period_data[1] = this->measurement_period_ & 0xFF;
+        this->wake_up_();
+        if (!this->write_register_(0x96, period_data, 2)) {
+          ESP_LOGE(TAG, "Failed to set measurement period");
+        }
       }
     }
   }
