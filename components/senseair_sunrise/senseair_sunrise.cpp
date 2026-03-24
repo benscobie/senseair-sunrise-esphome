@@ -46,6 +46,33 @@ bool SenseairSunriseComponent::write_register_(uint8_t reg, const uint8_t *data,
   return true;
 }
 
+bool SenseairSunriseComponent::trigger_single_measurement_() {
+  // Write 0x01 to register 0xC3 to start a single measurement
+  uint8_t cmd = 0x01;
+  if (!this->write_register_(0xC3, &cmd, 1)) {
+    ESP_LOGE(TAG, "Failed to trigger single measurement");
+    return false;
+  }
+
+  // Wait for measurement to complete
+  if (this->nrdy_pin_ != nullptr) {
+    // Poll nRDY pin (active LOW) with timeout
+    uint32_t start = millis();
+    while (this->nrdy_pin_->digital_read()) {
+      if (millis() - start > 5000) {
+        ESP_LOGE(TAG, "Timeout waiting for nRDY pin");
+        return false;
+      }
+      delay(50);
+    }
+  } else {
+    // No nRDY pin -- busy-wait for measurement to complete
+    delay(3000);
+  }
+
+  return true;
+}
+
 void SenseairSunriseComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Senseair Sunrise...");
 
