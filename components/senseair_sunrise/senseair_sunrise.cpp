@@ -112,6 +112,7 @@ void SenseairSunriseComponent::setup() {
       if (!this->write_register_(0x95, &this->measurement_mode_, 1)) {
         ESP_LOGE(TAG, "Failed to set measurement mode");
       }
+      delay(25);  // wait for EEPROM write to complete
     }
   }
 
@@ -128,6 +129,7 @@ void SenseairSunriseComponent::setup() {
       if (!this->write_register_(0x98, samples_data, 2)) {
         ESP_LOGE(TAG, "Failed to set number of samples");
       }
+      delay(25);  // wait for EEPROM write to complete
     }
   }
 
@@ -145,6 +147,7 @@ void SenseairSunriseComponent::setup() {
         if (!this->write_register_(0x96, period_data, 2)) {
           ESP_LOGE(TAG, "Failed to set measurement period");
         }
+        delay(25);  // wait for EEPROM write to complete
       }
     }
   }
@@ -169,9 +172,18 @@ void SenseairSunriseComponent::setup() {
       if (!this->write_register_(0xA5, &meter_control, 1)) {
         ESP_LOGE(TAG, "Failed to set IIR filter");
       }
+      delay(25);  // wait for EEPROM write to complete
     }
   }
 
+  // Reset the sensor to apply any EEPROM changes (required per TDE5531 for
+  // measurement mode, period, and samples) and clear stale measurement/filter
+  // state from before this boot (the sensor may stay powered across ESP resets).
+  this->wake_up_();
+  uint8_t reset_cmd = 0xFF;
+  if (!this->write_register_(0xA3, &reset_cmd, 1)) {
+    ESP_LOGW(TAG, "Failed to reset sensor");
+  }
 }
 
 void SenseairSunriseComponent::update() {
@@ -323,6 +335,7 @@ void SenseairSunriseComponent::abc_enable() {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
     return;
   }
+  delay(25);  // wait for EEPROM write to complete
   ESP_LOGI(TAG, "ABC enabled");
 }
 
@@ -339,6 +352,7 @@ void SenseairSunriseComponent::abc_disable() {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
     return;
   }
+  delay(25);  // wait for EEPROM write to complete
   ESP_LOGI(TAG, "ABC disabled");
 }
 
