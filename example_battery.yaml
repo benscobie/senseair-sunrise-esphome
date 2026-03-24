@@ -1,0 +1,64 @@
+# Senseair Sunrise CO2 sensor - Battery-optimized ESPHome config
+#
+# Uses single measurement mode + ESP deep sleep for minimal power draw.
+# Average current ~0.12mA at 5-min intervals (vs ~70mA continuous).
+#
+# Wiring (ESP8266 D1 Mini → Sunrise):
+#   D1 Mini 3V3  → Pin 2 (VBB), Pin 3 (VDDIO), Pin 9 (EN)
+#   D1 Mini GND  → Pin 1 (GND), Pin 6 (COMSEL, selects I2C mode)
+#   D1 Mini D2   → Pin 4 (SDA)
+#   D1 Mini D1   → Pin 5 (SCL)
+#   D1 Mini D5   → Pin 7 (nRDY)  [optional, remove nrdy_pin if not wired]
+#   Leave floating: Pin 8 (DVCC)
+#
+# Deep sleep note: WiFi is off during sleep. OTA updates require physical
+# access or adding a run_duration to deep_sleep for a wake window.
+#
+# Tuning notes:
+#   In single mode, deep_sleep.sleep_duration controls how often readings
+#   are taken (measurement_period is not used — the ESP triggers each
+#   measurement on demand).
+#
+#   Per Senseair docs (TDE7318): for measurement intervals > 1 minute,
+#   disable IIR filter and increase number_of_samples instead.
+#   E.g. for 5min intervals: iir_filter: false, number_of_samples: 32.
+
+esphome:
+  name: sunrise-battery
+  on_boot:
+    priority: -100  # run after all components are set up
+    then:
+      - component.update: my_sunrise
+      - delay: 1s  # allow time for MQTT/API publish
+      - deep_sleep.enter: deep_sleep_ctrl
+
+esp8266:
+  board: d1_mini
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+logger:
+
+deep_sleep:
+  id: deep_sleep_ctrl
+  sleep_duration: 5min
+
+i2c:
+  sda: D2
+  scl: D1
+
+sensor:
+  - platform: senseair_sunrise
+    id: my_sunrise
+    co2:
+      name: "CO2"
+    temperature:
+      name: "Sensor Temperature"
+    measurement_mode: single
+    nrdy_pin: D5
+    # number_of_samples: 32  # increase for intervals > 1min (Senseair TDE7318)
+    # iir_filter: false       # disable for intervals > 1min (Senseair TDE7318)
+    update_interval: never
