@@ -217,6 +217,32 @@ void SenseairSunriseComponent::setup() {
 void SenseairSunriseComponent::update() {
   this->wake_up_();
 
+  // Write barometric pressure for compensation (RAM register, every cycle)
+  if (this->pressure_compensation_) {
+    int16_t pressure = this->pressure_value_;  // static default
+    if (this->pressure_source_ != nullptr) {
+      if (this->pressure_source_->has_state()) {
+        // Convert hPa to 0.1 hPa units
+        pressure = static_cast<int16_t>(this->pressure_source_->state * 10.0f);
+      } else {
+        ESP_LOGD(TAG, "Pressure source not ready, skipping pressure write");
+        pressure = 0;  // skip write
+      }
+    }
+    if (pressure != 0) {
+      // Clamp to valid range 3000-13000 (300-1300 hPa)
+      if (pressure < 3000) pressure = 3000;
+      if (pressure > 13000) pressure = 13000;
+      uint8_t pressure_data[2] = {
+        static_cast<uint8_t>((pressure >> 8) & 0xFF),
+        static_cast<uint8_t>(pressure & 0xFF)
+      };
+      if (!this->write_register_(0xDC, pressure_data, 2)) {
+        ESP_LOGW(TAG, "Failed to write pressure compensation value");
+      }
+    }
+  }
+
   if (this->measurement_mode_ == 1) {
     // Single measurement mode: trigger and wait for result
     if (!this->trigger_single_measurement_()) {
