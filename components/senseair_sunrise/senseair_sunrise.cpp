@@ -171,6 +171,16 @@ void SenseairSunriseComponent::setup() {
 void SenseairSunriseComponent::update() {
   this->wake_up_();
 
+  if (this->measurement_mode_ == 1) {
+    // Single measurement mode: trigger and wait for result
+    if (!this->trigger_single_measurement_()) {
+      this->status_set_warning("Single measurement failed");
+      return;
+    }
+    // Re-wake after measurement completes (sensor may have gone idle)
+    this->wake_up_();
+  }
+
   // Read registers 0x00 through 0x09 (10 bytes)
   // 0x00-0x01: ErrorStatus
   // 0x02-0x05: Reserved
