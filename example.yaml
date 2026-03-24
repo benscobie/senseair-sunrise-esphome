@@ -39,6 +39,13 @@ sensor:
     temperature:
       name: "Sensor Temperature"
     # measurement_mode: continuous  # default; set to "single" for battery use (not yet supported)
+    #
+    # Measurement tuning (optional):
+    # number_of_samples: 8    # 1-1024, default 8. More samples = better accuracy, more power.
+    # measurement_period: 16s # Default 16s (factory). Set longer for power savings.
+    #                         # Must be >= samples x 300ms, rounded to even seconds.
+    # iir_filter: true        # Auto-disabled if measurement_period > 60s.
+    #                         # For periods > 60s: disable IIR and increase samples (e.g. 32).
     update_interval: 60s
 
 button:
