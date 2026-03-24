@@ -84,6 +84,61 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
+  // Sync number of samples (register 0x98-0x99, uint16, EEPROM)
+  this->wake_up_();
+  uint8_t samples_data[2];
+  if (this->read_register_(0x98, samples_data, 2)) {
+    uint16_t current = (uint16_t(samples_data[0]) << 8) | samples_data[1];
+    if (current != this->number_of_samples_) {
+      ESP_LOGI(TAG, "Updating number of samples: %u -> %u", current, this->number_of_samples_);
+      samples_data[0] = this->number_of_samples_ >> 8;
+      samples_data[1] = this->number_of_samples_ & 0xFF;
+      this->wake_up_();
+      if (!this->write_register_(0x98, samples_data, 2)) {
+        ESP_LOGE(TAG, "Failed to set number of samples");
+      }
+    }
+  }
+
+  // Sync measurement period (register 0x96-0x97, uint16 seconds)
+  this->wake_up_();
+  uint8_t period_data[2];
+  if (this->read_register_(0x96, period_data, 2)) {
+    uint16_t current = (uint16_t(period_data[0]) << 8) | period_data[1];
+    if (current != this->measurement_period_) {
+      ESP_LOGI(TAG, "Updating measurement period: %us -> %us", current, this->measurement_period_);
+      period_data[0] = this->measurement_period_ >> 8;
+      period_data[1] = this->measurement_period_ & 0xFF;
+      this->wake_up_();
+      if (!this->write_register_(0x96, period_data, 2)) {
+        ESP_LOGE(TAG, "Failed to set measurement period");
+      }
+    }
+  }
+
+  // Sync IIR filter (MeterControl register 0xA5, EEPROM)
+  // Bit 2: static IIR filter (0=enabled, 1=disabled)
+  // Bit 3: dynamic IIR filter (0=enabled, 1=disabled)
+  this->wake_up_();
+  uint8_t meter_control;
+  if (this->read_register_(0xA5, &meter_control, 1)) {
+    bool static_disabled = meter_control & 0x04;
+    bool dynamic_disabled = meter_control & 0x08;
+    bool currently_enabled = !static_disabled && !dynamic_disabled;
+    if (currently_enabled != this->iir_filter_) {
+      if (this->iir_filter_) {
+        meter_control &= ~0x0C;  // clear bits 2+3 (enable both filters)
+      } else {
+        meter_control |= 0x0C;   // set bits 2+3 (disable both filters)
+      }
+      ESP_LOGI(TAG, "Updating IIR filter: %s", this->iir_filter_ ? "enabled" : "disabled");
+      this->wake_up_();
+      if (!this->write_register_(0xA5, &meter_control, 1)) {
+        ESP_LOGE(TAG, "Failed to set IIR filter");
+      }
+    }
+  }
+
 }
 
 void SenseairSunriseComponent::update() {
