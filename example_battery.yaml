@@ -61,6 +61,7 @@ sensor:
     nrdy_pin: D5
     # number_of_samples: 32  # increase for intervals > 1min (Senseair TDE7318)
     # iir_filter: false       # disable for intervals > 1min (Senseair TDE7318)
+    # calibration_target: 400  # ABC/background calibration target (350-2000 ppm, default 400).
     #
     # Pressure compensation (optional, pick one):
     # pressure_source: bmp280_pressure  # ID of a pressure sensor (e.g. BMP280), in hPa
