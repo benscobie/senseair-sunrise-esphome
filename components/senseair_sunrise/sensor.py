@@ -221,6 +221,16 @@ async def to_code(config):
         nrdy_pin = await cg.gpio_pin_expression(nrdy_pin_config)
         cg.add(var.set_nrdy_pin(nrdy_pin))
 
+    if CONF_PRESSURE_SOURCE in config:
+        pressure_sens = await cg.get_variable(config[CONF_PRESSURE_SOURCE])
+        cg.add(var.set_pressure_compensation(True))
+        cg.add(var.set_pressure_source(pressure_sens))
+    elif CONF_PRESSURE in config:
+        # Convert hPa to 0.1 hPa int16 at build time
+        pressure_raw = int(round(config[CONF_PRESSURE] * 10))
+        cg.add(var.set_pressure_compensation(True))
+        cg.add(var.set_pressure_value(pressure_raw))
+
     if co2_config := config.get(CONF_CO2):
         sens = await sensor.new_sensor(co2_config)
         cg.add(var.set_co2_sensor(sens))
