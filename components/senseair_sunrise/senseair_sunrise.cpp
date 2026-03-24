@@ -361,6 +361,16 @@ void SenseairSunriseComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Measurement Period: %us", this->measurement_period_);
   }
   ESP_LOGCONFIG(TAG, "  IIR Filter: %s", this->iir_filter_ ? "enabled" : "disabled");
+  if (this->pressure_compensation_) {
+    if (this->pressure_source_ != nullptr) {
+      ESP_LOGCONFIG(TAG, "  Pressure Compensation: enabled (dynamic sensor)");
+    } else {
+      ESP_LOGCONFIG(TAG, "  Pressure Compensation: enabled (%.1f hPa)",
+                    this->pressure_value_ / 10.0f);
+    }
+  } else {
+    ESP_LOGCONFIG(TAG, "  Pressure Compensation: disabled");
+  }
   if (this->abc_period_ != 0) {
     ESP_LOGCONFIG(TAG, "  ABC Period: %uh", this->abc_period_);
   }
