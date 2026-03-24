@@ -42,6 +42,18 @@ external_components:
 
 logger:
 
+# Optional WiFi battery optimizations if you add network connectivity:
+# wifi:
+#   ssid: !secret wifi_ssid
+#   password: !secret wifi_password
+#   fast_connect: true  # Skip scanning and reconnect to the known SSID faster
+#   # manual_ip:        # Avoid DHCP negotiation to reduce wake time further
+#   #   static_ip: 192.168.1.50
+#   #   gateway: 192.168.1.1
+#   #   subnet: 255.255.255.0
+#   # output_power: 13dB  # Lower this if the node is close to the AP
+#   # power_save_mode: high  # More WiFi power saving, but can reduce reliability
+
 deep_sleep:
   id: deep_sleep_ctrl
   sleep_duration: 5min
