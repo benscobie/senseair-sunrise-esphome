@@ -36,7 +36,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   sensor::Sensor *temperature_sensor_{nullptr};
   uint8_t measurement_mode_{0};
   uint16_t number_of_samples_{8};
-  uint16_t measurement_period_{4};
+  uint16_t measurement_period_{16};
   bool iir_filter_{true};
 };
 

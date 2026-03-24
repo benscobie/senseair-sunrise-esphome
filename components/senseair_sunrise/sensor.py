@@ -60,7 +60,7 @@ def _validate_tuning(config):
             )
         config[CONF_MEASUREMENT_PERIOD] = period_s
     else:
-        config[CONF_MEASUREMENT_PERIOD] = min_period
+        config[CONF_MEASUREMENT_PERIOD] = max(min_period, 16)
 
     period = config[CONF_MEASUREMENT_PERIOD]
     if CONF_IIR_FILTER not in config:
