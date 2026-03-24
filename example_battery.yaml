@@ -61,4 +61,9 @@ sensor:
     nrdy_pin: D5
     # number_of_samples: 32  # increase for intervals > 1min (Senseair TDE7318)
     # iir_filter: false       # disable for intervals > 1min (Senseair TDE7318)
+    #
+    # Pressure compensation (optional, pick one):
+    # pressure_source: bmp280_pressure  # ID of a pressure sensor (e.g. BMP280), in hPa
+    # pressure: 1013.25                 # Static pressure in hPa (sea level default)
+    # altitude: 250                     # Altitude in meters (auto-converts to pressure)
     update_interval: never
