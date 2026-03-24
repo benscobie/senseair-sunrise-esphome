@@ -47,6 +47,9 @@ sensor:
     #                         # Must be >= samples x 300ms, rounded to even seconds.
     # iir_filter: true        # Auto-disabled if measurement_period > 60s.
     #                         # For periods > 60s: disable IIR and increase samples (e.g. 32).
+    # abc_period: 180h        # ABC auto-calibration period (default 180h / 7.5 days).
+    #                         # Shorter (e.g. 192h = 8d) for well-ventilated spaces,
+    #                         # longer for stable or confined environments.
     update_interval: 60s
 
 button:

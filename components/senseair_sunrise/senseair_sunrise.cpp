@@ -176,6 +176,25 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
+  // Sync ABC period (register 0x9A-0x9B, uint16 hours, EEPROM)
+  if (this->abc_period_ != 0) {
+    this->wake_up_();
+    uint8_t abc_data[2];
+    if (this->read_register_(0x9A, abc_data, 2)) {
+      uint16_t current = (uint16_t(abc_data[0]) << 8) | abc_data[1];
+      if (current != this->abc_period_) {
+        ESP_LOGI(TAG, "Updating ABC period: %uh -> %uh", current, this->abc_period_);
+        abc_data[0] = this->abc_period_ >> 8;
+        abc_data[1] = this->abc_period_ & 0xFF;
+        this->wake_up_();
+        if (!this->write_register_(0x9A, abc_data, 2)) {
+          ESP_LOGE(TAG, "Failed to set ABC period");
+        }
+        delay(25);  // wait for EEPROM write to complete
+      }
+    }
+  }
+
   // Reset the sensor to apply any EEPROM changes (required per TDE5531 for
   // measurement mode, period, and samples) and clear stale measurement/filter
   // state from before this boot (the sensor may stay powered across ESP resets).
@@ -307,6 +326,9 @@ void SenseairSunriseComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Measurement Period: %us", this->measurement_period_);
   }
   ESP_LOGCONFIG(TAG, "  IIR Filter: %s", this->iir_filter_ ? "enabled" : "disabled");
+  if (this->abc_period_ != 0) {
+    ESP_LOGCONFIG(TAG, "  ABC Period: %uh", this->abc_period_);
+  }
   LOG_SENSOR("  ", "CO2", this->co2_sensor_);
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
 }

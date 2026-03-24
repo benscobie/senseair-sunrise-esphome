@@ -24,6 +24,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_number_of_samples(uint16_t samples) { this->number_of_samples_ = samples; }
   void set_measurement_period(uint16_t period) { this->measurement_period_ = period; }
   void set_iir_filter(bool enabled) { this->iir_filter_ = enabled; }
+  void set_abc_period(uint16_t hours) { this->abc_period_ = hours; }
 
   void background_calibration();
   void abc_enable();
@@ -42,6 +43,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   uint16_t number_of_samples_{8};
   uint16_t measurement_period_{16};
   bool iir_filter_{true};
+  uint16_t abc_period_{0};  // 0 = not configured (use sensor default)
 };
 
 template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...> {

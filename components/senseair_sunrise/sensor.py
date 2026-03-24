@@ -27,6 +27,7 @@ CONF_NRDY_PIN = "nrdy_pin"
 CONF_NUMBER_OF_SAMPLES = "number_of_samples"
 CONF_MEASUREMENT_PERIOD = "measurement_period"
 CONF_IIR_FILTER = "iir_filter"
+CONF_ABC_PERIOD = "abc_period"
 
 MEASUREMENT_MODES = {
     "continuous": 0,
@@ -47,6 +48,18 @@ def _min_measurement_period(samples):
 
 
 def _validate_tuning(config):
+    # Validate ABC period (mode-independent, controls auto-calibration timing)
+    if CONF_ABC_PERIOD in config:
+        total_ms = int(config[CONF_ABC_PERIOD].total_milliseconds)
+        if total_ms % 3600000 != 0:
+            raise cv.Invalid("abc_period must be a whole number of hours")
+        abc_hours = total_ms // 3600000
+        if abc_hours < 1 or abc_hours > 65535:
+            raise cv.Invalid(
+                f"abc_period ({abc_hours}h) out of range. Must be 1h to 65535h"
+            )
+        config[CONF_ABC_PERIOD] = abc_hours
+
     if config[CONF_MEASUREMENT_MODE] == 1:  # single mode
         if CONF_MEASUREMENT_PERIOD in config:
             raise cv.Invalid(
@@ -108,6 +121,7 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_MEASUREMENT_PERIOD): cv.positive_time_period,
             cv.Optional(CONF_IIR_FILTER): cv.boolean,
+            cv.Optional(CONF_ABC_PERIOD): cv.positive_time_period,
             cv.Optional(CONF_CO2): sensor.sensor_schema(
                 unit_of_measurement=UNIT_PARTS_PER_MILLION,
                 icon=ICON_MOLECULE_CO2,
@@ -172,6 +186,9 @@ async def to_code(config):
     cg.add(var.set_number_of_samples(config[CONF_NUMBER_OF_SAMPLES]))
     cg.add(var.set_measurement_period(config[CONF_MEASUREMENT_PERIOD]))
     cg.add(var.set_iir_filter(config[CONF_IIR_FILTER]))
+
+    if CONF_ABC_PERIOD in config:
+        cg.add(var.set_abc_period(config[CONF_ABC_PERIOD]))
 
     if nrdy_pin_config := config.get(CONF_NRDY_PIN):
         nrdy_pin = await cg.gpio_pin_expression(nrdy_pin_config)
