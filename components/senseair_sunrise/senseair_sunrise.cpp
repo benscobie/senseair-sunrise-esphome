@@ -243,6 +243,9 @@ void SenseairSunriseComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Senseair Sunrise:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
+  ESP_LOGCONFIG(TAG, "  Number of Samples: %u", this->number_of_samples_);
+  ESP_LOGCONFIG(TAG, "  Measurement Period: %us", this->measurement_period_);
+  ESP_LOGCONFIG(TAG, "  IIR Filter: %s", this->iir_filter_ ? "enabled" : "disabled");
   LOG_SENSOR("  ", "CO2", this->co2_sensor_);
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
 }
