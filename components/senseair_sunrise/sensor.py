@@ -28,6 +28,9 @@ CONF_NUMBER_OF_SAMPLES = "number_of_samples"
 CONF_MEASUREMENT_PERIOD = "measurement_period"
 CONF_IIR_FILTER = "iir_filter"
 CONF_ABC_PERIOD = "abc_period"
+CONF_PRESSURE_SOURCE = "pressure_source"
+CONF_PRESSURE = "pressure"
+CONF_ALTITUDE = "altitude"
 
 MEASUREMENT_MODES = {
     "continuous": 0,
@@ -48,6 +51,27 @@ def _min_measurement_period(samples):
 
 
 def _validate_tuning(config):
+    # Validate pressure compensation options (mutually exclusive)
+    pressure_opts = [
+        opt for opt in [CONF_PRESSURE_SOURCE, CONF_PRESSURE, CONF_ALTITUDE]
+        if opt in config
+    ]
+    if len(pressure_opts) > 1:
+        raise cv.Invalid(
+            f"Only one of pressure_source, pressure, or altitude may be specified "
+            f"(got: {', '.join(pressure_opts)})"
+        )
+
+    # Convert altitude to pressure using ISA barometric formula
+    if CONF_ALTITUDE in config:
+        altitude = config[CONF_ALTITUDE]
+        pressure_hpa = 1013.25 * (1 - 2.25577e-5 * altitude) ** 5.25588
+        _LOGGER.info(
+            "Altitude %dm -> barometric pressure %.1f hPa", altitude, pressure_hpa
+        )
+        config[CONF_PRESSURE] = pressure_hpa
+        del config[CONF_ALTITUDE]
+
     # Validate ABC period (mode-independent, controls auto-calibration timing)
     if CONF_ABC_PERIOD in config:
         total_ms = int(config[CONF_ABC_PERIOD].total_milliseconds)
@@ -122,6 +146,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MEASUREMENT_PERIOD): cv.positive_time_period,
             cv.Optional(CONF_IIR_FILTER): cv.boolean,
             cv.Optional(CONF_ABC_PERIOD): cv.positive_time_period,
+            cv.Optional(CONF_PRESSURE_SOURCE): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_PRESSURE): cv.float_range(min=300.0, max=1300.0),
+            cv.Optional(CONF_ALTITUDE): cv.float_range(min=-500.0, max=10000.0),
             cv.Optional(CONF_CO2): sensor.sensor_schema(
                 unit_of_measurement=UNIT_PARTS_PER_MILLION,
                 icon=ICON_MOLECULE_CO2,
