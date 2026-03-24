@@ -152,25 +152,34 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Sync IIR filter (MeterControl register 0xA5, EEPROM)
+  // Sync MeterControl register 0xA5 (EEPROM)
   // Bit 2: static IIR filter (0=enabled, 1=disabled)
   // Bit 3: dynamic IIR filter (0=enabled, 1=disabled)
+  // Bit 4: pressure compensation (0=enabled, 1=disabled)
   this->wake_up_();
   uint8_t meter_control;
   if (this->read_register_(0xA5, &meter_control, 1)) {
-    bool static_disabled = meter_control & 0x04;
-    bool dynamic_disabled = meter_control & 0x08;
-    bool currently_enabled = !static_disabled && !dynamic_disabled;
-    if (currently_enabled != this->iir_filter_) {
-      if (this->iir_filter_) {
-        meter_control &= ~0x0C;  // clear bits 2+3 (enable both filters)
-      } else {
-        meter_control |= 0x0C;   // set bits 2+3 (disable both filters)
-      }
-      ESP_LOGI(TAG, "Updating IIR filter: %s", this->iir_filter_ ? "enabled" : "disabled");
+    uint8_t desired = meter_control;
+
+    // IIR filter bits 2-3
+    if (this->iir_filter_) {
+      desired &= ~0x0C;  // clear bits 2+3 (enable both filters)
+    } else {
+      desired |= 0x0C;   // set bits 2+3 (disable both filters)
+    }
+
+    // Pressure compensation bit 4
+    if (this->pressure_compensation_) {
+      desired &= ~0x10;  // clear bit 4 (enable pressure compensation)
+    } else {
+      desired |= 0x10;   // set bit 4 (disable pressure compensation)
+    }
+
+    if (desired != meter_control) {
+      ESP_LOGI(TAG, "Updating MeterControl: 0x%02X -> 0x%02X", meter_control, desired);
       this->wake_up_();
-      if (!this->write_register_(0xA5, &meter_control, 1)) {
-        ESP_LOGE(TAG, "Failed to set IIR filter");
+      if (!this->write_register_(0xA5, &desired, 1)) {
+        ESP_LOGE(TAG, "Failed to write MeterControl register");
       }
       delay(25);  // wait for EEPROM write to complete
     }
