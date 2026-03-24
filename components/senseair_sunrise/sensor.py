@@ -3,7 +3,7 @@ import logging
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome import automation
+from esphome import automation, pins
 from esphome.components import i2c, sensor
 from esphome.const import (
     CONF_CO2,
@@ -23,6 +23,7 @@ CODEOWNERS = []
 DEPENDENCIES = ["i2c"]
 
 CONF_MEASUREMENT_MODE = "measurement_mode"
+CONF_NRDY_PIN = "nrdy_pin"
 CONF_NUMBER_OF_SAMPLES = "number_of_samples"
 CONF_MEASUREMENT_PERIOD = "measurement_period"
 CONF_IIR_FILTER = "iir_filter"
@@ -101,6 +102,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MEASUREMENT_MODE, default="continuous"): cv.enum(
                 MEASUREMENT_MODES, lower=True
             ),
+            cv.Optional(CONF_NRDY_PIN): pins.gpio_input_pin_schema,
             cv.Optional(CONF_NUMBER_OF_SAMPLES, default=8): cv.int_range(
                 min=1, max=1024
             ),
@@ -170,6 +172,10 @@ async def to_code(config):
     cg.add(var.set_number_of_samples(config[CONF_NUMBER_OF_SAMPLES]))
     cg.add(var.set_measurement_period(config[CONF_MEASUREMENT_PERIOD]))
     cg.add(var.set_iir_filter(config[CONF_IIR_FILTER]))
+
+    if nrdy_pin_config := config.get(CONF_NRDY_PIN):
+        nrdy_pin = await cg.gpio_pin_expression(nrdy_pin_config)
+        cg.add(var.set_nrdy_pin(nrdy_pin))
 
     if co2_config := config.get(CONF_CO2):
         sens = await sensor.new_sensor(co2_config)
