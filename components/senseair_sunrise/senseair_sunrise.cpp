@@ -237,7 +237,7 @@ void SenseairSunriseComponent::setup() {
 
   // Reset the sensor to apply any EEPROM changes (required per TDE5531 for
   // measurement mode, period, and samples) and clear stale measurement/filter
-  // state from before this boot (sensor may stay powered across ESP resets).
+  // state from before this boot (the sensor may stay powered across ESP resets).
   this->wake_up_();
   uint8_t reset_cmd = 0xFF;
   if (!this->write_register_(0xA3, &reset_cmd, 1)) {

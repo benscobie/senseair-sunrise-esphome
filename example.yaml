@@ -58,7 +58,7 @@ sensor:
     # pressure_source: bmp280_pressure  # ID of a pressure sensor (e.g. BMP280), in hPa
     # pressure: 1013.25                 # Static pressure in hPa (sea level default)
     # altitude: 250                     # Altitude in meters (auto-converts to pressure)
-    update_interval: 10s
+    update_interval: 60s
 
 button:
   - platform: template
