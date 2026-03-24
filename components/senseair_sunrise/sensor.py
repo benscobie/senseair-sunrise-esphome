@@ -29,6 +29,7 @@ CONF_IIR_FILTER = "iir_filter"
 
 MEASUREMENT_MODES = {
     "continuous": 0,
+    "single": 1,
 }
 
 senseair_sunrise_ns = cg.esphome_ns.namespace("senseair_sunrise")
@@ -45,6 +46,18 @@ def _min_measurement_period(samples):
 
 
 def _validate_tuning(config):
+    if config[CONF_MEASUREMENT_MODE] == 1:  # single mode
+        if CONF_MEASUREMENT_PERIOD in config:
+            raise cv.Invalid(
+                "measurement_period is not used in single measurement mode "
+                "(measurement interval is controlled by deep_sleep.sleep_duration)"
+            )
+        config[CONF_MEASUREMENT_PERIOD] = 0  # unused, won't be written to sensor
+        if CONF_IIR_FILTER not in config:
+            config[CONF_IIR_FILTER] = True
+        return config
+
+    # Continuous mode — existing validation below unchanged
     samples = config[CONF_NUMBER_OF_SAMPLES]
     min_period = _min_measurement_period(samples)
 
