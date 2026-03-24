@@ -28,6 +28,7 @@ CONF_NUMBER_OF_SAMPLES = "number_of_samples"
 CONF_MEASUREMENT_PERIOD = "measurement_period"
 CONF_IIR_FILTER = "iir_filter"
 CONF_ABC_PERIOD = "abc_period"
+CONF_CALIBRATION_TARGET = "calibration_target"
 CONF_PRESSURE_SOURCE = "pressure_source"
 CONF_PRESSURE = "pressure"
 CONF_ALTITUDE = "altitude"
@@ -146,6 +147,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MEASUREMENT_PERIOD): cv.positive_time_period,
             cv.Optional(CONF_IIR_FILTER): cv.boolean,
             cv.Optional(CONF_ABC_PERIOD): cv.positive_time_period,
+            cv.Optional(CONF_CALIBRATION_TARGET): cv.int_range(min=350, max=2000),
             cv.Optional(CONF_PRESSURE_SOURCE): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_PRESSURE): cv.float_range(min=300.0, max=1300.0),
             cv.Optional(CONF_ALTITUDE): cv.float_range(min=-500.0, max=10000.0),
@@ -216,6 +218,9 @@ async def to_code(config):
 
     if CONF_ABC_PERIOD in config:
         cg.add(var.set_abc_period(config[CONF_ABC_PERIOD]))
+
+    if CONF_CALIBRATION_TARGET in config:
+        cg.add(var.set_calibration_target(config[CONF_CALIBRATION_TARGET]))
 
     if nrdy_pin_config := config.get(CONF_NRDY_PIN):
         nrdy_pin = await cg.gpio_pin_expression(nrdy_pin_config)
