@@ -5,9 +5,23 @@
 #include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/i2c/i2c.h"
+#include "esphome/core/preferences.h"
 
 namespace esphome {
 namespace senseair_sunrise {
+
+// Sensor algorithm state preserved across power cycles in single-measurement
+// mode.  Covers registers 0xC4-0xDF:
+//   0xC4-0xC5  ABC time
+//   0xC6-0xCD  ABC parameters
+//   0xCE-0xDB  IIR filter parameters
+//   0xDC-0xDD  barometric pressure (overwritten by explicit write each cycle)
+//   0xDE-0xDF  ABC barometric pressure
+struct SunriseSavedState {
+  uint8_t block[28];      // registers 0xC4-0xDF
+  uint32_t config_hash;   // fingerprint of settings that invalidate state
+  uint32_t crc;           // CRC32 over block[] + config_hash
+} __attribute__((packed));
 
 class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice {
  public:
@@ -54,6 +68,13 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   bool pressure_compensation_{false};
   sensor::Sensor *pressure_source_{nullptr};
   int16_t pressure_value_{0};  // static pressure in 0.1 hPa units, 0 = unused
+
+  ESPPreferenceObject state_pref_;
+  bool state_valid_{false};
+  SunriseSavedState saved_state_{};
+
+  uint32_t compute_config_hash_() const;
+  uint32_t compute_state_crc_(const SunriseSavedState &state) const;
 };
 
 template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...> {

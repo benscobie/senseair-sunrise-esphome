@@ -3,6 +3,8 @@
 #include "esphome/core/log.h"
 #include <cstring>
 #include <vector>
+#include "esphome/core/application.h"
+#include "esphome/core/preferences.h"
 
 namespace esphome {
 namespace senseair_sunrise {
@@ -97,9 +99,46 @@ bool SenseairSunriseComponent::trigger_single_measurement_() {
   return false;
 }
 
+uint32_t SenseairSunriseComponent::compute_config_hash_() const {
+  uint32_t h = 0;
+  h = (h * 31) + this->measurement_mode_;
+  h = (h * 31) + (this->iir_filter_ ? 1 : 0);
+  h = (h * 31) + (this->pressure_compensation_ ? 1 : 0);
+  return h;
+}
+
+uint32_t SenseairSunriseComponent::compute_state_crc_(const SunriseSavedState &state) const {
+  uint32_t crc = 0xFFFFFFFF;
+  auto feed = [&](uint8_t byte) {
+    crc ^= byte;
+    for (int i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+  };
+  for (size_t i = 0; i < sizeof(state.block); i++)
+    feed(state.block[i]);
+  for (int i = 0; i < 4; i++)
+    feed((state.config_hash >> (i * 8)) & 0xFF);
+  return crc ^ 0xFFFFFFFF;
+}
+
 void SenseairSunriseComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Senseair Sunrise...");
   bool needs_reset = false;
+
+  // Initialize preference storage for single-measurement state preservation
+  if (this->measurement_mode_ == 1) {
+    this->state_pref_ = global_preferences->make_preference<SunriseSavedState>(fnv1_hash("senseair_sunrise_state"));
+    uint32_t expected_config = this->compute_config_hash_();
+    if (this->state_pref_.load(&this->saved_state_) &&
+        this->saved_state_.config_hash == expected_config &&
+        this->saved_state_.crc == this->compute_state_crc_(this->saved_state_)) {
+      this->state_valid_ = true;
+      ESP_LOGD(TAG, "Loaded saved sensor state from preferences");
+    } else {
+      this->state_valid_ = false;
+      ESP_LOGD(TAG, "No valid saved sensor state (first cycle, config change, or corrupt)");
+    }
+  }
 
   if (this->nrdy_pin_ != nullptr) {
     this->nrdy_pin_->setup();
@@ -290,6 +329,17 @@ void SenseairSunriseComponent::setup() {
 }
 
 void SenseairSunriseComponent::update() {
+  // In single mode, restore saved ABC/filter state from previous cycle.
+  // This must happen BEFORE the pressure write (which overwrites the stale
+  // saved pressure at 0xDC-0xDD with the current value) and BEFORE the
+  // trigger command (TDE5531 ordering requirement).
+  // Do NOT write state on the first cycle (no valid data yet, per TDE5531).
+  if (this->measurement_mode_ == 1 && this->state_valid_) {
+    if (!this->write_register_(0xC4, this->saved_state_.block, 28)) {
+      ESP_LOGW(TAG, "Failed to restore sensor state");
+    }
+  }
+
   // Write barometric pressure for compensation (RAM register, every cycle)
   if (this->pressure_compensation_) {
     int16_t pressure = this->pressure_value_;  // static default
@@ -317,6 +367,10 @@ void SenseairSunriseComponent::update() {
   }
 
   if (this->measurement_mode_ == 1) {
+    // Clear stale ErrorStatus before triggering fresh measurement
+    uint8_t clear_err = 0x00;
+    this->write_register_(0x9D, &clear_err, 1);
+
     // Single measurement mode: trigger and wait for result
     if (!this->trigger_single_measurement_()) {
       this->status_set_warning("Single measurement failed");
@@ -421,6 +475,26 @@ void SenseairSunriseComponent::update() {
     int16_t temp_raw = ((int16_t) data[8] << 8) | data[9];
     float temperature = temp_raw / 100.0f;
     this->temperature_sensor_->publish_state(temperature);
+  }
+
+  // Save updated sensor state for next power cycle (single mode only).
+  // TDE5531: read state AFTER measurement completes, save before power-down.
+  if (this->measurement_mode_ == 1) {
+    SunriseSavedState new_state{};
+    if (this->read_register_(0xC4, new_state.block, 28)) {
+      new_state.config_hash = this->compute_config_hash_();
+      new_state.crc = this->compute_state_crc_(new_state);
+      // Only write to flash if state actually changed (reduces flash wear)
+      if (std::memcmp(&new_state, &this->saved_state_, sizeof(new_state)) != 0) {
+        this->saved_state_ = new_state;
+        this->state_valid_ = true;
+        if (!this->state_pref_.save(&this->saved_state_)) {
+          ESP_LOGW(TAG, "Failed to persist sensor state to flash");
+        }
+      }
+    } else {
+      ESP_LOGW(TAG, "Failed to read sensor state after measurement");
+    }
   }
 
   this->status_clear_warning();
