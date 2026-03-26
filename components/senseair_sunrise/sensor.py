@@ -28,7 +28,7 @@ CONF_NUMBER_OF_SAMPLES = "number_of_samples"
 CONF_MEASUREMENT_PERIOD = "measurement_period"
 CONF_IIR_FILTER = "iir_filter"
 CONF_ABC_PERIOD = "abc_period"
-CONF_CALIBRATION_TARGET = "calibration_target"
+CONF_ABC_TARGET = "abc_target"
 CONF_PRESSURE_SOURCE = "pressure_source"
 CONF_PRESSURE = "pressure"
 CONF_ALTITUDE = "altitude"
@@ -93,7 +93,7 @@ def _validate_tuning(config):
             )
         config[CONF_MEASUREMENT_PERIOD] = 0  # unused, won't be written to sensor
         if CONF_IIR_FILTER not in config:
-            config[CONF_IIR_FILTER] = True
+            config[CONF_IIR_FILTER] = False
         return config
 
     # Continuous mode — existing validation below unchanged
@@ -105,6 +105,18 @@ def _validate_tuning(config):
         if total_ms % 1000 != 0:
             raise cv.Invalid("measurement_period must be a whole number of seconds")
         period_s = total_ms // 1000
+        # Sensor rounds odd values to next even second (TDE5531); normalize
+        # to avoid infinite read-compare-write loop on boot.
+        if period_s % 2 != 0:
+            period_s += 1
+            _LOGGER.info(
+                "Measurement period rounded to %ds (sensor requires even seconds)",
+                period_s,
+            )
+        if period_s > 65534:
+            raise cv.Invalid(
+                f"measurement_period ({period_s}s) exceeds sensor maximum of 65534s"
+            )
         if period_s < min_period:
             raise cv.Invalid(
                 f"measurement_period ({period_s}s) too short for {samples} samples. "
@@ -147,7 +159,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MEASUREMENT_PERIOD): cv.positive_time_period,
             cv.Optional(CONF_IIR_FILTER): cv.boolean,
             cv.Optional(CONF_ABC_PERIOD): cv.positive_time_period,
-            cv.Optional(CONF_CALIBRATION_TARGET): cv.int_range(min=350, max=2000),
+            cv.Optional(CONF_ABC_TARGET): cv.int_range(min=350, max=2000),
             cv.Optional(CONF_PRESSURE_SOURCE): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_PRESSURE): cv.float_range(min=300.0, max=1300.0),
             cv.Optional(CONF_ALTITUDE): cv.float_range(min=-500.0, max=10000.0),
@@ -219,8 +231,8 @@ async def to_code(config):
     if CONF_ABC_PERIOD in config:
         cg.add(var.set_abc_period(config[CONF_ABC_PERIOD]))
 
-    if CONF_CALIBRATION_TARGET in config:
-        cg.add(var.set_calibration_target(config[CONF_CALIBRATION_TARGET]))
+    if CONF_ABC_TARGET in config:
+        cg.add(var.set_abc_target(config[CONF_ABC_TARGET]))
 
     if nrdy_pin_config := config.get(CONF_NRDY_PIN):
         nrdy_pin = await cg.gpio_pin_expression(nrdy_pin_config)

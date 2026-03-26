@@ -25,7 +25,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_measurement_period(uint16_t period) { this->measurement_period_ = period; }
   void set_iir_filter(bool enabled) { this->iir_filter_ = enabled; }
   void set_abc_period(uint16_t hours) { this->abc_period_ = hours; }
-  void set_calibration_target(uint16_t target) { this->calibration_target_ = target; }
+  void set_abc_target(uint16_t target) { this->abc_target_ = target; }
   void set_pressure_compensation(bool enabled) { this->pressure_compensation_ = enabled; }
   void set_pressure_source(sensor::Sensor *source) { this->pressure_source_ = source; }
   void set_pressure_value(int16_t value) { this->pressure_value_ = value; }
@@ -43,12 +43,14 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   sensor::Sensor *co2_sensor_{nullptr};
   sensor::Sensor *temperature_sensor_{nullptr};
   GPIOPin *nrdy_pin_{nullptr};
+  bool nrdy_enabled_{true};
+  bool nrdy_active_high_{true};
   uint8_t measurement_mode_{0};
   uint16_t number_of_samples_{8};
   uint16_t measurement_period_{16};
   bool iir_filter_{true};
   uint16_t abc_period_{0};  // 0 = not configured (use sensor default)
-  uint16_t calibration_target_{0};  // 0 = not configured (use sensor default)
+  uint16_t abc_target_{0};  // 0 = not configured (use sensor default)
   bool pressure_compensation_{false};
   sensor::Sensor *pressure_source_{nullptr};
   int16_t pressure_value_{0};  // static pressure in 0.1 hPa units, 0 = unused

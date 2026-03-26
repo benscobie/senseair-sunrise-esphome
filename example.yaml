@@ -50,9 +50,7 @@ sensor:
     # abc_period: 180h        # ABC auto-calibration period (default 180h / 7.5 days).
     #                         # Shorter (e.g. 192h = 8d) for well-ventilated spaces,
     #                         # longer for stable or confined environments.
-    # calibration_target: 400  # ABC/background calibration target (350-2000 ppm).
-    #                          # Default 400 (sea-level fresh air). Adjust for altitude
-    #                          # or environments where baseline CO2 differs.
+    # abc_target: 400  # ABC/background calibration baseline (350-2000 ppm).
     #
     # Pressure compensation (optional, pick one):
     # pressure_source: bmp280_pressure  # ID of a pressure sensor (e.g. BMP280), in hPa

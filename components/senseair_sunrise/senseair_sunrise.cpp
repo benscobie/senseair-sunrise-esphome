@@ -246,17 +246,17 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Sync calibration target (register 0x9E-0x9F, uint16 ppm, EEPROM)
-  if (this->calibration_target_ != 0) {
+  // Sync ABC target (register 0x9E-0x9F, uint16 ppm, EEPROM)
+  if (this->abc_target_ != 0) {
     uint8_t cal_data[2];
     if (this->read_register_(0x9E, cal_data, 2)) {
       uint16_t current = (uint16_t(cal_data[0]) << 8) | cal_data[1];
-      if (current != this->calibration_target_) {
-        ESP_LOGI(TAG, "Updating calibration target: %u ppm -> %u ppm", current, this->calibration_target_);
-        cal_data[0] = this->calibration_target_ >> 8;
-        cal_data[1] = this->calibration_target_ & 0xFF;
+      if (current != this->abc_target_) {
+        ESP_LOGI(TAG, "Updating ABC target: %u ppm -> %u ppm", current, this->abc_target_);
+        cal_data[0] = this->abc_target_ >> 8;
+        cal_data[1] = this->abc_target_ & 0xFF;
         if (!this->write_register_(0x9E, cal_data, 2)) {
-          ESP_LOGE(TAG, "Failed to set calibration target");
+          ESP_LOGE(TAG, "Failed to set ABC target");
         } else {
           needs_reset = true;
         }
@@ -264,13 +264,13 @@ void SenseairSunriseComponent::setup() {
       }
     }
     // Warn if target < 400 ppm and ABC is enabled (datasheet: may cause incorrect ABC operation)
-    if (this->calibration_target_ < 400) {
+    if (this->abc_target_ < 400) {
       uint8_t mc;
       if (this->read_register_(0xA5, &mc, 1)) {
         if (!(mc & 0x02)) {  // bit 1 clear = ABC enabled
-          ESP_LOGW(TAG, "Calibration target (%u ppm) is below 400 ppm with ABC enabled — "
+          ESP_LOGW(TAG, "ABC target (%u ppm) is below 400 ppm with ABC enabled — "
                         "this may cause incorrect ABC operation (see Senseair datasheet)",
-                   this->calibration_target_);
+                   this->abc_target_);
         }
       }
     }
@@ -447,8 +447,8 @@ void SenseairSunriseComponent::dump_config() {
   if (this->abc_period_ != 0) {
     ESP_LOGCONFIG(TAG, "  ABC Period: %uh", this->abc_period_);
   }
-  if (this->calibration_target_ != 0) {
-    ESP_LOGCONFIG(TAG, "  Calibration Target: %u ppm", this->calibration_target_);
+  if (this->abc_target_ != 0) {
+    ESP_LOGCONFIG(TAG, "  ABC Target: %u ppm", this->abc_target_);
   }
   LOG_SENSOR("  ", "CO2", this->co2_sensor_);
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
