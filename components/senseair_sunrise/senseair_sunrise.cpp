@@ -12,18 +12,30 @@ namespace senseair_sunrise {
 static const char *const TAG = "senseair_sunrise";
 
 bool SenseairSunriseComponent::wake_up_() {
-  // Address-only probe: START-address-STOP per TDE5531 wake-up spec.
-  // NACK is expected and harmless if sensor was asleep.
-  this->write(nullptr, 0);
+  // Wake sensor by sending its address on the bus. TDE5531 says any SDA
+  // activity wakes the sensor from sleep; NACK is expected and harmless.
+  // We send a dummy byte (0x00) because some ESP8266 I2C implementations
+  // do not reliably generate bus activity for zero-length writes.
+  uint8_t dummy = 0x00;
+  this->write(&dummy, 1);
   delay(1);
   return true;
 }
 
 bool SenseairSunriseComponent::read_register_(uint8_t reg, uint8_t *data, size_t len) {
   this->wake_up_();
-  i2c::ErrorCode err = this->write_read(&reg, 1, data, len);
+  // Use separate write + read transactions (STOP between them) rather than
+  // write_read() (repeated START).  The Sunrise sensor does not reliably
+  // handle repeated START on all platforms; separate transactions work
+  // because the 15 ms wake timeout keeps the sensor awake between them.
+  i2c::ErrorCode err = this->write(&reg, 1);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read register 0x%02X failed: %d", reg, err);
+    ESP_LOGW(TAG, "Write register address 0x%02X failed: %d", reg, err);
+    return false;
+  }
+  err = this->read(data, len);
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "Read data from register 0x%02X failed: %d", reg, err);
     return false;
   }
   return true;
