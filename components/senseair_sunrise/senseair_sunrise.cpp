@@ -394,6 +394,13 @@ void SenseairSunriseComponent::update() {
     ESP_LOGE(TAG, "Memory error");
   }
 
+  // Clear ErrorStatus now that we've read and logged it (register 0x9D, TDE5531).
+  // In single mode this will be cleared before triggering (see Task 4).
+  if (this->measurement_mode_ == 0) {
+    uint8_t clear_err = 0x00;
+    this->write_register_(0x9D, &clear_err, 1);
+  }
+
   if (skip_reading) {
     this->status_set_warning("Sensor error");
     return;
@@ -456,12 +463,29 @@ void SenseairSunriseComponent::dump_config() {
 
 void SenseairSunriseComponent::background_calibration() {
   ESP_LOGI(TAG, "Initiating background calibration...");
+  // Step 1: Clear CalibrationStatus before starting (TDE5531 recommendation)
+  uint8_t clear = 0x00;
+  if (!this->write_register_(0x81, &clear, 1)) {
+    ESP_LOGW(TAG, "Failed to clear CalibrationStatus");
+  }
+  // Step 2: Write calibration command 0x7C06 to registers 0x82-0x83
   uint8_t cmd[2] = {0x7C, 0x06};
   if (!this->write_register_(0x82, cmd, 2)) {
     ESP_LOGE(TAG, "Failed to send background calibration command");
     return;
   }
-  ESP_LOGI(TAG, "Background calibration command sent");
+  // Step 3: Read back CalibrationStatus to verify (TDE5531 example)
+  delay(50);
+  uint8_t status;
+  if (this->read_register_(0x81, &status, 1)) {
+    if (status & 0x20) {
+      ESP_LOGI(TAG, "Background calibration successful (status=0x%02X)", status);
+    } else {
+      ESP_LOGW(TAG, "Background calibration status: 0x%02X (expected bit 5 set)", status);
+    }
+  } else {
+    ESP_LOGW(TAG, "Failed to read CalibrationStatus after calibration");
+  }
 }
 
 void SenseairSunriseComponent::abc_enable() {
@@ -471,13 +495,24 @@ void SenseairSunriseComponent::abc_enable() {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
     return;
   }
+  if (!(meter_control & 0x02)) {
+    ESP_LOGI(TAG, "ABC is already enabled");
+    return;
+  }
   meter_control &= ~0x02;
   if (!this->write_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
     return;
   }
-  delay(25);  // wait for EEPROM write to complete
-  ESP_LOGI(TAG, "ABC enabled");
+  delay(25);  // EEPROM write time for 006-0-0007
+  // EEPROM-backed changes require a sensor reset (TDE7318)
+  uint8_t reset_cmd = 0xFF;
+  if (!this->write_register_(0xA3, &reset_cmd, 1)) {
+    ESP_LOGW(TAG, "Failed to reset sensor after enabling ABC");
+  } else {
+    delay(50);  // T_Start typ 35 ms
+  }
+  ESP_LOGI(TAG, "ABC enabled (sensor reset)");
 }
 
 void SenseairSunriseComponent::abc_disable() {
@@ -487,13 +522,24 @@ void SenseairSunriseComponent::abc_disable() {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
     return;
   }
+  if (meter_control & 0x02) {
+    ESP_LOGI(TAG, "ABC is already disabled");
+    return;
+  }
   meter_control |= 0x02;
   if (!this->write_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
     return;
   }
-  delay(25);  // wait for EEPROM write to complete
-  ESP_LOGI(TAG, "ABC disabled");
+  delay(25);  // EEPROM write time for 006-0-0007
+  // EEPROM-backed changes require a sensor reset (TDE7318)
+  uint8_t reset_cmd = 0xFF;
+  if (!this->write_register_(0xA3, &reset_cmd, 1)) {
+    ESP_LOGW(TAG, "Failed to reset sensor after disabling ABC");
+  } else {
+    delay(50);  // T_Start typ 35 ms
+  }
+  ESP_LOGI(TAG, "ABC disabled (sensor reset)");
 }
 
 }  // namespace senseair_sunrise
