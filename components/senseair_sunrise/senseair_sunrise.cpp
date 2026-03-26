@@ -10,31 +10,25 @@ namespace senseair_sunrise {
 static const char *const TAG = "senseair_sunrise";
 
 bool SenseairSunriseComponent::wake_up_() {
-  // Write register address 0x00 to wake sensor.
-  // If sensor was asleep, it will NACK -- this is expected behavior.
-  // Any SDA activity wakes it up.
-  uint8_t reg = 0x00;
-  this->write(&reg, 1);
-  // ignore error -- NACK is expected if sensor was asleep
+  // Address-only probe: START-address-STOP per TDE5531 wake-up spec.
+  // NACK is expected and harmless if sensor was asleep.
+  this->write(nullptr, 0);
   delay(1);
   return true;
 }
 
 bool SenseairSunriseComponent::read_register_(uint8_t reg, uint8_t *data, size_t len) {
-  i2c::ErrorCode err = this->write(&reg, 1);
+  this->wake_up_();
+  i2c::ErrorCode err = this->write_read(&reg, 1, data, len);
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Write register address 0x%02X failed: %d", reg, err);
-    return false;
-  }
-  err = this->read(data, len);
-  if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "Read data from register 0x%02X failed: %d", reg, err);
+    ESP_LOGW(TAG, "Read register 0x%02X failed: %d", reg, err);
     return false;
   }
   return true;
 }
 
 bool SenseairSunriseComponent::write_register_(uint8_t reg, const uint8_t *data, size_t len) {
+  this->wake_up_();
   std::vector<uint8_t> buf(len + 1);
   buf[0] = reg;
   std::memcpy(&buf[1], data, len);
@@ -54,33 +48,62 @@ bool SenseairSunriseComponent::trigger_single_measurement_() {
     return false;
   }
 
-  // Wait for measurement to complete
-  if (this->nrdy_pin_ != nullptr) {
-    // Poll nRDY pin (active LOW) with timeout
+  // TDE7318 lists T_Start typ 35 ms and T_Sample max 300 ms per sample for
+  // Sunrise 006-0-0007. Add a generous margin for communication and CO2
+  // post-processing before the result registers are ready.
+  uint32_t timeout_ms = 35 + (static_cast<uint32_t>(this->number_of_samples_) * 300) + 1500;
+
+  if (this->nrdy_pin_ != nullptr && this->nrdy_enabled_) {
+    bool active_level = this->nrdy_active_high_;
+    bool saw_active = false;
     uint32_t start = millis();
-    while (this->nrdy_pin_->digital_read()) {
-      if (millis() - start > 5000) {
-        ESP_LOGE(TAG, "Timeout waiting for nRDY pin");
-        return false;
+
+    while (millis() - start <= timeout_ms) {
+      bool pin_state = this->nrdy_pin_->digital_read();
+      if (pin_state == active_level) {
+        saw_active = true;
+      } else if (saw_active) {
+        return true;
       }
-      delay(50);
+      delay(10);
     }
+
+    ESP_LOGW(TAG, "nRDY timeout after %ums (enabled=%s, active=%s, saw_active=%s); falling back to status polling",
+             timeout_ms, this->nrdy_enabled_ ? "yes" : "no", this->nrdy_active_high_ ? "HIGH" : "LOW",
+             saw_active ? "yes" : "no");
   } else {
-    // No nRDY pin -- busy-wait for measurement to complete
-    delay(3000);
+    // If nRDY is not wired or is disabled in the sensor, let the measurement
+    // progress before starting I2C polling.
+    delay(timeout_ms);
   }
 
-  return true;
+  uint32_t start = millis();
+  uint8_t last_status[2] = {0xFF, 0xFF};
+  while (millis() - start <= 1000) {
+    uint8_t status[2];
+    if (this->read_register_(0x00, status, 2)) {
+      last_status[0] = status[0];
+      last_status[1] = status[1];
+      // LSB bit 7: No measurement completed yet
+      if ((status[1] & 0x80) == 0) {
+        return true;
+      }
+    }
+    delay(20);
+  }
+
+  ESP_LOGE(TAG, "Timeout waiting for single measurement to complete (last ErrorStatus=0x%02X%02X)",
+           last_status[0], last_status[1]);
+  return false;
 }
 
 void SenseairSunriseComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Senseair Sunrise...");
+  bool needs_reset = false;
 
   if (this->nrdy_pin_ != nullptr) {
     this->nrdy_pin_->setup();
   }
-
-  this->wake_up_();
 
   // Read firmware revision (registers 0x38-0x39)
   uint8_t fw_data[2];
@@ -92,8 +115,13 @@ void SenseairSunriseComponent::setup() {
     return;
   }
 
+  // Read firmware type (register 0x2F, uint8)
+  uint8_t fw_type;
+  if (this->read_register_(0x2F, &fw_type, 1)) {
+    ESP_LOGI(TAG, "Firmware type: %u", fw_type);
+  }
+
   // Read sensor ID (registers 0x3A-0x3D)
-  this->wake_up_();
   uint8_t id_data[4];
   if (this->read_register_(0x3A, id_data, 4)) {
     uint32_t sensor_id = ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) |
@@ -101,23 +129,33 @@ void SenseairSunriseComponent::setup() {
     ESP_LOGI(TAG, "Sensor ID: %u", sensor_id);
   }
 
+  // Read product code (registers 0x70-0x7F, 16-byte ASCII string, requires firmware 4.08+)
+  if (fw_data[0] > 4 || (fw_data[0] == 4 && fw_data[1] >= 8)) {
+    uint8_t product_code[16];
+    if (this->read_register_(0x70, product_code, 16)) {
+      char product_str[17];
+      memcpy(product_str, product_code, 16);
+      product_str[16] = '\0';
+      ESP_LOGI(TAG, "Product code: %s", product_str);
+    }
+  }
+
   // Check and sync measurement mode with config
-  this->wake_up_();
   uint8_t meas_mode;
   if (this->read_register_(0x95, &meas_mode, 1)) {
     if (meas_mode != this->measurement_mode_) {
       ESP_LOGW(TAG, "Sensor measurement mode (%d) differs from configured mode (%d), updating sensor EEPROM",
                meas_mode, this->measurement_mode_);
-      this->wake_up_();
       if (!this->write_register_(0x95, &this->measurement_mode_, 1)) {
         ESP_LOGE(TAG, "Failed to set measurement mode");
+      } else {
+        needs_reset = true;
       }
       delay(25);  // wait for EEPROM write to complete
     }
   }
 
   // Sync number of samples (register 0x98-0x99, uint16, EEPROM)
-  this->wake_up_();
   uint8_t samples_data[2];
   if (this->read_register_(0x98, samples_data, 2)) {
     uint16_t current = (uint16_t(samples_data[0]) << 8) | samples_data[1];
@@ -125,9 +163,10 @@ void SenseairSunriseComponent::setup() {
       ESP_LOGI(TAG, "Updating number of samples: %u -> %u", current, this->number_of_samples_);
       samples_data[0] = this->number_of_samples_ >> 8;
       samples_data[1] = this->number_of_samples_ & 0xFF;
-      this->wake_up_();
       if (!this->write_register_(0x98, samples_data, 2)) {
         ESP_LOGE(TAG, "Failed to set number of samples");
+      } else {
+        needs_reset = true;
       }
       delay(25);  // wait for EEPROM write to complete
     }
@@ -135,7 +174,6 @@ void SenseairSunriseComponent::setup() {
 
   if (this->measurement_mode_ == 0) {
     // Sync measurement period (register 0x96-0x97, uint16 seconds) — continuous mode only
-    this->wake_up_();
     uint8_t period_data[2];
     if (this->read_register_(0x96, period_data, 2)) {
       uint16_t current = (uint16_t(period_data[0]) << 8) | period_data[1];
@@ -143,9 +181,10 @@ void SenseairSunriseComponent::setup() {
         ESP_LOGI(TAG, "Updating measurement period: %us -> %us", current, this->measurement_period_);
         period_data[0] = this->measurement_period_ >> 8;
         period_data[1] = this->measurement_period_ & 0xFF;
-        this->wake_up_();
         if (!this->write_register_(0x96, period_data, 2)) {
           ESP_LOGE(TAG, "Failed to set measurement period");
+        } else {
+          needs_reset = true;
         }
         delay(25);  // wait for EEPROM write to complete
       }
@@ -156,9 +195,11 @@ void SenseairSunriseComponent::setup() {
   // Bit 2: static IIR filter (0=enabled, 1=disabled)
   // Bit 3: dynamic IIR filter (0=enabled, 1=disabled)
   // Bit 4: pressure compensation (0=enabled, 1=disabled)
-  this->wake_up_();
+  // Bit 5: nRDY polarity (1=active HIGH during measurement, 0=active LOW)
   uint8_t meter_control;
   if (this->read_register_(0xA5, &meter_control, 1)) {
+    this->nrdy_enabled_ = (meter_control & 0x01) == 0;
+    this->nrdy_active_high_ = (meter_control & 0x20) != 0;
     uint8_t desired = meter_control;
 
     // IIR filter bits 2-3
@@ -177,9 +218,10 @@ void SenseairSunriseComponent::setup() {
 
     if (desired != meter_control) {
       ESP_LOGI(TAG, "Updating MeterControl: 0x%02X -> 0x%02X", meter_control, desired);
-      this->wake_up_();
       if (!this->write_register_(0xA5, &desired, 1)) {
         ESP_LOGE(TAG, "Failed to write MeterControl register");
+      } else {
+        needs_reset = true;
       }
       delay(25);  // wait for EEPROM write to complete
     }
@@ -187,7 +229,6 @@ void SenseairSunriseComponent::setup() {
 
   // Sync ABC period (register 0x9A-0x9B, uint16 hours, EEPROM)
   if (this->abc_period_ != 0) {
-    this->wake_up_();
     uint8_t abc_data[2];
     if (this->read_register_(0x9A, abc_data, 2)) {
       uint16_t current = (uint16_t(abc_data[0]) << 8) | abc_data[1];
@@ -195,9 +236,10 @@ void SenseairSunriseComponent::setup() {
         ESP_LOGI(TAG, "Updating ABC period: %uh -> %uh", current, this->abc_period_);
         abc_data[0] = this->abc_period_ >> 8;
         abc_data[1] = this->abc_period_ & 0xFF;
-        this->wake_up_();
         if (!this->write_register_(0x9A, abc_data, 2)) {
           ESP_LOGE(TAG, "Failed to set ABC period");
+        } else {
+          needs_reset = true;
         }
         delay(25);  // wait for EEPROM write to complete
       }
@@ -206,7 +248,6 @@ void SenseairSunriseComponent::setup() {
 
   // Sync calibration target (register 0x9E-0x9F, uint16 ppm, EEPROM)
   if (this->calibration_target_ != 0) {
-    this->wake_up_();
     uint8_t cal_data[2];
     if (this->read_register_(0x9E, cal_data, 2)) {
       uint16_t current = (uint16_t(cal_data[0]) << 8) | cal_data[1];
@@ -214,16 +255,16 @@ void SenseairSunriseComponent::setup() {
         ESP_LOGI(TAG, "Updating calibration target: %u ppm -> %u ppm", current, this->calibration_target_);
         cal_data[0] = this->calibration_target_ >> 8;
         cal_data[1] = this->calibration_target_ & 0xFF;
-        this->wake_up_();
         if (!this->write_register_(0x9E, cal_data, 2)) {
           ESP_LOGE(TAG, "Failed to set calibration target");
+        } else {
+          needs_reset = true;
         }
         delay(25);  // wait for EEPROM write to complete
       }
     }
     // Warn if target < 400 ppm and ABC is enabled (datasheet: may cause incorrect ABC operation)
     if (this->calibration_target_ < 400) {
-      this->wake_up_();
       uint8_t mc;
       if (this->read_register_(0xA5, &mc, 1)) {
         if (!(mc & 0x02)) {  // bit 1 clear = ABC enabled
@@ -235,19 +276,20 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Reset the sensor to apply any EEPROM changes (required per TDE5531 for
-  // measurement mode, period, and samples) and clear stale measurement/filter
-  // state from before this boot (the sensor may stay powered across ESP resets).
-  this->wake_up_();
-  uint8_t reset_cmd = 0xFF;
-  if (!this->write_register_(0xA3, &reset_cmd, 1)) {
-    ESP_LOGW(TAG, "Failed to reset sensor");
+  // Reset only if an EEPROM-backed setting changed. On deep-sleep wake the
+  // sensor is often still powered, so avoiding an unnecessary reset reduces
+  // startup churn and preserves the normal single-measurement timing path.
+  if (needs_reset) {
+    uint8_t reset_cmd = 0xFF;
+    if (!this->write_register_(0xA3, &reset_cmd, 1)) {
+      ESP_LOGW(TAG, "Failed to reset sensor");
+    } else {
+      delay(50);  // T_Start is 35 ms typical; give the sensor margin after reset
+    }
   }
 }
 
 void SenseairSunriseComponent::update() {
-  this->wake_up_();
-
   // Write barometric pressure for compensation (RAM register, every cycle)
   if (this->pressure_compensation_) {
     int16_t pressure = this->pressure_value_;  // static default
@@ -280,8 +322,6 @@ void SenseairSunriseComponent::update() {
       this->status_set_warning("Single measurement failed");
       return;
     }
-    // Re-wake after measurement completes (sensor may have gone idle)
-    this->wake_up_();
   }
 
   // Read registers 0x00 through 0x09 (10 bytes)
@@ -386,6 +426,8 @@ void SenseairSunriseComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  Measurement Mode: %s", this->measurement_mode_ == 0 ? "continuous" : "single");
   if (this->nrdy_pin_ != nullptr) {
     LOG_PIN("  nRDY Pin: ", this->nrdy_pin_);
+    ESP_LOGCONFIG(TAG, "  nRDY Enabled: %s", this->nrdy_enabled_ ? "yes" : "no");
+    ESP_LOGCONFIG(TAG, "  nRDY Active During Measurement: %s", this->nrdy_active_high_ ? "HIGH" : "LOW");
   }
   ESP_LOGCONFIG(TAG, "  Number of Samples: %u", this->number_of_samples_);
   if (this->measurement_mode_ == 0) {
@@ -414,7 +456,6 @@ void SenseairSunriseComponent::dump_config() {
 
 void SenseairSunriseComponent::background_calibration() {
   ESP_LOGI(TAG, "Initiating background calibration...");
-  this->wake_up_();
   uint8_t cmd[2] = {0x7C, 0x06};
   if (!this->write_register_(0x82, cmd, 2)) {
     ESP_LOGE(TAG, "Failed to send background calibration command");
@@ -425,7 +466,6 @@ void SenseairSunriseComponent::background_calibration() {
 
 void SenseairSunriseComponent::abc_enable() {
   ESP_LOGI(TAG, "Enabling ABC...");
-  this->wake_up_();
   uint8_t meter_control;
   if (!this->read_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
@@ -442,7 +482,6 @@ void SenseairSunriseComponent::abc_enable() {
 
 void SenseairSunriseComponent::abc_disable() {
   ESP_LOGI(TAG, "Disabling ABC...");
-  this->wake_up_();
   uint8_t meter_control;
   if (!this->read_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
