@@ -187,6 +187,9 @@ CONFIG_SCHEMA = cv.All(
 BackgroundCalibrationAction = senseair_sunrise_ns.class_(
     "BackgroundCalibrationAction", automation.Action
 )
+DumpRegistersAction = senseair_sunrise_ns.class_(
+    "DumpRegistersAction", automation.Action
+)
 ABCEnableAction = senseair_sunrise_ns.class_("ABCEnableAction", automation.Action)
 ABCDisableAction = senseair_sunrise_ns.class_("ABCDisableAction", automation.Action)
 
@@ -195,6 +198,12 @@ SENSEAIR_SUNRISE_ACTION_SCHEMA = automation.maybe_simple_id(
 )
 
 
+@automation.register_action(
+    "senseair_sunrise.dump_registers",
+    DumpRegistersAction,
+    SENSEAIR_SUNRISE_ACTION_SCHEMA,
+    synchronous=True,
+)
 @automation.register_action(
     "senseair_sunrise.background_calibration",
     BackgroundCalibrationAction,

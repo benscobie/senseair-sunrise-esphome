@@ -475,7 +475,18 @@ void SenseairSunriseComponent::update() {
   // Parse CO2 (signed 16-bit, registers 0x06-0x07)
   int16_t co2_raw = ((int16_t) data[6] << 8) | data[7];
   if (co2_raw < 0) {
-    ESP_LOGW(TAG, "CO2 reading is negative (%d), skipping", co2_raw);
+    // Diagnostic: read unfiltered concentration (0x14-0x15), filtered no-pressure (0x12-0x13),
+    // and measurement count (0x0D) to help distinguish calibration vs hardware issue.
+    uint8_t diag[9];  // 0x0D through 0x15
+    if (this->read_register_(0x0D, diag, 9)) {
+      uint8_t meas_count = diag[0];
+      int16_t filtered_no_pc = ((int16_t) diag[5] << 8) | diag[6];
+      int16_t unfiltered = ((int16_t) diag[7] << 8) | diag[8];
+      ESP_LOGW(TAG, "CO2 reading is negative (%d), skipping — diag: unfiltered=%d, filtered_no_pc=%d, meas_count=%u",
+               co2_raw, unfiltered, filtered_no_pc, meas_count);
+    } else {
+      ESP_LOGW(TAG, "CO2 reading is negative (%d), skipping", co2_raw);
+    }
     return;
   }
   if (this->co2_sensor_ != nullptr) {
@@ -572,6 +583,41 @@ void SenseairSunriseComponent::background_calibration() {
   } else {
     ESP_LOGW(TAG, "Failed to read CalibrationStatus after calibration");
   }
+}
+
+
+void SenseairSunriseComponent::dump_registers() {
+  ESP_LOGI(TAG, "=== Register dump ===");
+  // Read in blocks matching the TDE5531 register map
+  struct { uint8_t start; uint8_t len; const char *label; } blocks[] = {
+    {0x00, 16, "00-0F status+meas"},    // ErrorStatus, CO2, temp, count, cycle
+    {0x10, 6,  "10-15 unfilt/filt"},     // Unfiltered/filtered concentrations
+    {0x2F, 1,  "2F fw_type"},            // Firmware type
+    {0x38, 6,  "38-3D fw_rev+id"},       // Firmware rev + sensor ID
+    {0x81, 9,  "81-89 cal+abc_time"},    // CalStatus, CalCmd, CalTarget, MeasOverride, ABC time
+    {0x8A, 8,  "8A-91 abc_params"},      // ABC parameter state
+    {0x93, 1,  "93 start_single"},       // Start single measurement
+    {0x95, 5,  "95-99 mode+timing"},     // Mode, period, samples
+    {0x9A, 2,  "9A-9B abc_period"},      // ABC period
+    {0x9E, 2,  "9E-9F abc_target"},      // ABC target
+    {0xA1, 1,  "A1 iir_param"},          // IIR filter parameter
+    {0xA5, 1,  "A5 meter_ctrl"},         // MeterControl
+    {0xA7, 5,  "A7-AB addr+scale"},      // Address + scale factors
+    {0xC0, 32, "C0-DF mirror_block"},    // Full mirror/state block
+  };
+  for (auto &b : blocks) {
+    uint8_t data[32];
+    if (this->read_register_(b.start, data, b.len)) {
+      char hex[97];  // 32 bytes * 3 chars + null
+      for (uint8_t i = 0; i < b.len; i++)
+        snprintf(hex + i * 3, 4, "%02X ", data[i]);
+      hex[b.len * 3 - 1] = '\0';  // trim trailing space
+      ESP_LOGI(TAG, "  [%s]: %s", b.label, hex);
+    } else {
+      ESP_LOGW(TAG, "  [%s]: READ FAILED", b.label);
+    }
+  }
+  ESP_LOGI(TAG, "=== End register dump ===");
 }
 
 void SenseairSunriseComponent::abc_enable() {

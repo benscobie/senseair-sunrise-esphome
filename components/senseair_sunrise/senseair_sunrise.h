@@ -45,6 +45,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_pressure_value(int16_t value) { this->pressure_value_ = value; }
 
   void background_calibration();
+  void dump_registers();
   void abc_enable();
   void abc_disable();
 
@@ -81,6 +82,15 @@ template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...
  public:
   BackgroundCalibrationAction(SenseairSunriseComponent *parent) : parent_(parent) {}
   void play(const Ts &...x) override { this->parent_->background_calibration(); }
+
+ protected:
+  SenseairSunriseComponent *parent_;
+};
+
+template<typename... Ts> class DumpRegistersAction : public Action<Ts...> {
+ public:
+  DumpRegistersAction(SenseairSunriseComponent *parent) : parent_(parent) {}
+  void play(const Ts &...x) override { this->parent_->dump_registers(); }
 
  protected:
   SenseairSunriseComponent *parent_;
