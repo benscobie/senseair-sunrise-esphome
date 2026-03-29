@@ -95,3 +95,9 @@ sensor:
     # pressure: 1013.25                 # Static pressure in hPa (sea level default)
     # altitude: 250                     # Altitude in meters (auto-converts to pressure)
     update_interval: never
+
+switch:
+  - platform: senseair_sunrise
+    senseair_sunrise_id: my_sunrise
+    abc:
+      name: "ABC"
