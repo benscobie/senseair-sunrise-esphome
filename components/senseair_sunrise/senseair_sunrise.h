@@ -65,7 +65,6 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void wake_up_();
   bool read_register_(uint8_t reg, uint8_t *data, size_t len);
   bool write_register_(uint8_t reg, const uint8_t *data, size_t len);
-  bool trigger_single_measurement_();
   bool abc_set_(bool enable);
 
   sensor::Sensor *co2_sensor_{nullptr};

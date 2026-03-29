@@ -73,63 +73,6 @@ bool SenseairSunriseComponent::write_register_(uint8_t reg, const uint8_t *data,
   return true;
 }
 
-bool SenseairSunriseComponent::trigger_single_measurement_() {
-  // Write 0x01 to start a single measurement
-  uint8_t cmd = 0x01;
-  if (!this->write_register_(REG_START_SINGLE, &cmd, 1)) {
-    ESP_LOGE(TAG, "Failed to trigger single measurement");
-    return false;
-  }
-
-  // TDE7318 lists T_Start typ 35 ms and T_Sample max 300 ms per sample for
-  // Sunrise 006-0-0007. Add a generous margin for communication and CO2
-  // post-processing before the result registers are ready.
-  uint32_t timeout_ms = 35 + (static_cast<uint32_t>(this->number_of_samples_) * 300) + 1500;
-
-  if (this->nrdy_pin_ != nullptr && this->nrdy_enabled_) {
-    bool active_level = this->nrdy_active_high_;
-    bool saw_active = false;
-    uint32_t start = millis();
-
-    while (millis() - start <= timeout_ms) {
-      bool pin_state = this->nrdy_pin_->digital_read();
-      if (pin_state == active_level) {
-        saw_active = true;
-      } else if (saw_active) {
-        return true;
-      }
-      delay(10);
-    }
-
-    ESP_LOGW(TAG, "nRDY timeout after %ums (enabled=%s, active=%s, saw_active=%s); falling back to status polling",
-             timeout_ms, this->nrdy_enabled_ ? "yes" : "no", this->nrdy_active_high_ ? "HIGH" : "LOW",
-             saw_active ? "yes" : "no");
-  } else {
-    // If nRDY is not wired or is disabled in the sensor, let the measurement
-    // progress before starting I2C polling.
-    delay(timeout_ms);
-  }
-
-  uint32_t start = millis();
-  uint8_t last_status[2] = {0xFF, 0xFF};
-  while (millis() - start <= 1000) {
-    uint8_t status[2];
-    if (this->read_register_(REG_ERROR_STATUS, status, 2)) {
-      last_status[0] = status[0];
-      last_status[1] = status[1];
-      // LSB bit 7: No measurement completed yet
-      if ((status[1] & 0x80) == 0) {
-        return true;
-      }
-    }
-    delay(20);
-  }
-
-  ESP_LOGE(TAG, "Timeout waiting for single measurement to complete (last ErrorStatus=0x%02X%02X)",
-           last_status[0], last_status[1]);
-  return false;
-}
-
 uint32_t SenseairSunriseComponent::compute_config_hash_() const {
   uint32_t h = 0;
   h = (h * 31) + this->measurement_mode_;
