@@ -357,6 +357,7 @@ void SenseairSunriseComponent::update() {
     this->measurement_start_ = millis();
     this->saw_nrdy_active_ = false;
     this->state_ = SunriseState::WAIT_MEASUREMENT;
+    ESP_LOGD(TAG, "Single measurement triggered, timeout=%ums", this->measurement_timeout_ms_);
     return;  // Non-blocking — loop() takes over from here
   }
 
@@ -395,6 +396,18 @@ void SenseairSunriseComponent::loop() {
     }
 
     case SunriseState::POLL_STATUS: {
+      if (millis() - this->poll_start_ > 1000) {
+        ESP_LOGE(TAG, "Timeout waiting for single measurement to complete");
+        this->status_set_warning("Single measurement timeout");
+        this->state_ = SunriseState::IDLE;
+        return;
+      }
+
+      // Rate-limit I2C polling to avoid bus contention (~50ms between reads)
+      if (millis() - this->last_poll_attempt_ms_ < 50)
+        return;
+      this->last_poll_attempt_ms_ = millis();
+
       // Poll ErrorStatus register — bit 7 of LSB clears when measurement is ready
       uint8_t status[2];
       if (this->read_register_(REG_ERROR_STATUS, status, 2)) {
@@ -402,12 +415,6 @@ void SenseairSunriseComponent::loop() {
           this->state_ = SunriseState::READ_RESULT;
           return;
         }
-      }
-
-      if (millis() - this->poll_start_ > 1000) {
-        ESP_LOGE(TAG, "Timeout waiting for single measurement to complete");
-        this->status_set_warning("Single measurement timeout");
-        this->state_ = SunriseState::IDLE;
       }
       return;
     }
