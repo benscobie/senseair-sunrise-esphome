@@ -19,9 +19,6 @@ from esphome.const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-CODEOWNERS = []
-DEPENDENCIES = ["i2c"]
-
 CONF_MEASUREMENT_MODE = "measurement_mode"
 CONF_NRDY_PIN = "nrdy_pin"
 CONF_NUMBER_OF_SAMPLES = "number_of_samples"
@@ -38,10 +35,7 @@ MEASUREMENT_MODES = {
     "single": 1,
 }
 
-senseair_sunrise_ns = cg.esphome_ns.namespace("senseair_sunrise")
-SenseairSunriseComponent = senseair_sunrise_ns.class_(
-    "SenseairSunriseComponent", cg.PollingComponent, i2c.I2CDevice
-)
+from . import senseair_sunrise_ns, SenseairSunriseComponent, CODEOWNERS, DEPENDENCIES
 
 def _min_measurement_period(samples):
     """Minimum measurement period: ceil(samples * 0.3) rounded up to nearest even second."""
