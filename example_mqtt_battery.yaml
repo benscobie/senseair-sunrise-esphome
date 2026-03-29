@@ -1,0 +1,120 @@
+# Senseair Sunrise CO2 sensor - Battery-optimized ESPHome config (MQTT)
+#
+# Uses MQTT instead of the native ESPHome API.
+# Suitable for Home Assistant via MQTT integration with auto-discovery.
+#
+# Uses single measurement mode + ESP deep sleep for minimal power draw.
+# Average current ~0.12mA at 5-min intervals (vs ~70mA continuous).
+#
+# Wiring (ESP8266 D1 Mini → Sunrise):
+#   D1 Mini 3V3  → Pin 2 (VBB), Pin 3 (VDDIO), Pin 9 (EN)
+#   D1 Mini GND  → Pin 1 (GND), Pin 6 (COMSEL, selects I2C mode)
+#   D1 Mini D2   → Pin 4 (SDA)
+#   D1 Mini D1   → Pin 5 (SCL)
+#   D1 Mini D5   → Pin 7 (nRDY)  [optional, remove nrdy_pin if not wired]
+#   Leave floating: Pin 8 (DVCC)
+#
+# Deep sleep note: WiFi is off during sleep. OTA updates require catching the
+# device while it is awake, or adding a run_duration / OTA-mode strategy.
+#
+# Secrets required in secrets.yaml:
+#   mqtt_broker: 192.168.1.x
+#   mqtt_username: myuser    # optional, remove username/password if not needed
+#   mqtt_password: mypass    # optional
+#
+# Tuning notes:
+#   In single mode, deep_sleep.sleep_duration controls how often readings
+#   are taken (measurement_period is not used — the ESP triggers each
+#   measurement on demand).
+#
+#   Per Senseair docs (TDE7318): for measurement intervals > 1 minute,
+#   disable IIR filter and increase number_of_samples instead.
+#   E.g. for 5min intervals: iir_filter: false, number_of_samples: 32.
+
+esphome:
+  name: sunrise-mqtt-battery
+  on_boot:
+    priority: -100  # run after all components are set up
+    then:
+      - component.update: my_sunrise
+      - wait_until:
+          condition:
+            mqtt.connected:
+          timeout: 8s
+      - delay: 200ms  # allow time for the state update to flush
+      - deep_sleep.enter: deep_sleep_ctrl
+
+esp8266:
+  board: d1_mini
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true  # Skip scanning and reconnect to the known SSID faster
+  # manual_ip:        # Avoid DHCP negotiation to reduce wake time further
+  #   static_ip: 192.168.1.50
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  # output_power: 13dB  # Lower this if the node is close to the AP
+  # power_save_mode: high  # More WiFi power saving, but can reduce reliability
+
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username   # optional, remove if broker has no auth
+  password: !secret mqtt_password   # optional
+  reboot_timeout: 0s                # don't reboot waiting for MQTT when sleeping
+  birth_message:
+    topic: sunrise-mqtt-battery/status
+    payload: online
+    retain: true
+  will_message:
+    topic: sunrise-mqtt-battery/status
+    payload: offline
+    retain: true
+
+ota:
+  - platform: esphome
+
+deep_sleep:
+  id: deep_sleep_ctrl
+  sleep_duration: 10s
+
+i2c:
+  sda: D2
+  scl: D1
+
+sensor:
+  - platform: senseair_sunrise
+    id: my_sunrise
+    co2:
+      name: "CO2"
+    temperature:
+      name: "Sensor Temperature"
+    measurement_mode: single
+    nrdy_pin:
+      number: D5
+      mode:
+        input: true
+        pullup: true
+    # number_of_samples: 32  # increase for intervals > 1min (Senseair TDE7318)
+    # iir_filter: false       # disable for intervals > 1min (Senseair TDE7318)
+    # abc_target: 400  # ABC/background calibration baseline (350-2000 ppm, default 400).
+    #
+    # Pressure compensation (optional, pick one):
+    # pressure_source: bmp280_pressure  # ID of a pressure sensor (e.g. BMP280), in hPa
+    # pressure: 1013.25                 # Static pressure in hPa (sea level default)
+    # altitude: 250                     # Altitude in meters (auto-converts to pressure)
+    update_interval: never
+
+switch:
+  - platform: senseair_sunrise
+    senseair_sunrise_id: my_sunrise
+    abc:
+      name: "ABC"
