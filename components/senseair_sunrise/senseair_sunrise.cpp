@@ -538,6 +538,10 @@ void SenseairSunriseComponent::update() {
   this->status_clear_warning();
 }
 
+void SenseairSunriseComponent::loop() {}
+
+void SenseairSunriseComponent::read_and_publish_() {}
+
 void SenseairSunriseComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Senseair Sunrise:");
   LOG_I2C_DEVICE(this);

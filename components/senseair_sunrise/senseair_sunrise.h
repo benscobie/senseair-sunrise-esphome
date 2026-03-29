@@ -26,10 +26,18 @@ struct SunriseSavedState {
   uint32_t crc;           // CRC32 over block[] + config_hash
 } __attribute__((packed));
 
+enum class SunriseState : uint8_t {
+  IDLE,               // No single-measurement in progress
+  WAIT_MEASUREMENT,   // Waiting for nRDY pin transition or timeout
+  POLL_STATUS,        // Polling ErrorStatus register as fallback
+  READ_RESULT,        // Measurement ready — read and publish
+};
+
 class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
   void update() override;
+  void loop() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
@@ -79,6 +87,15 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   ESPPreferenceObject state_pref_;
   bool state_valid_{false};
   SunriseSavedState saved_state_{};
+
+  // Async state machine for non-blocking single measurement
+  SunriseState state_{SunriseState::IDLE};
+  uint32_t measurement_start_{0};
+  uint32_t measurement_timeout_ms_{0};
+  uint32_t poll_start_{0};
+  bool saw_nrdy_active_{false};
+
+  void read_and_publish_();
 
   uint32_t compute_config_hash_() const;
   uint32_t compute_state_crc_(const SunriseSavedState &state) const;
