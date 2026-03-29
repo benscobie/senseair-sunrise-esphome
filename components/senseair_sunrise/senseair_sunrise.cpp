@@ -356,11 +356,15 @@ void SenseairSunriseComponent::setup() {
 }
 
 void SenseairSunriseComponent::update() {
+  // Guard: skip if a single measurement is still in progress
+  if (this->state_ != SunriseState::IDLE) {
+    ESP_LOGW(TAG, "Previous measurement still in progress, skipping update");
+    return;
+  }
+
   // In single mode, restore saved ABC/filter state from previous cycle.
-  // This must happen BEFORE the pressure write (which overwrites the stale
-  // saved pressure at 0xDC-0xDD with the current value) and BEFORE the
-  // trigger command (TDE5531 ordering requirement).
-  // Do NOT write state on the first cycle (no valid data yet, per TDE5531).
+  // Must happen BEFORE pressure write and trigger (TDE5531 ordering).
+  // Do NOT write state on the first cycle (no valid data yet).
   if (this->measurement_mode_ == 1 && this->state_valid_) {
     if (!this->write_register_(REG_STATE_BLOCK, this->saved_state_.block, 28)) {
       ESP_LOGW(TAG, "Failed to restore sensor state");
@@ -394,17 +398,26 @@ void SenseairSunriseComponent::update() {
   }
 
   if (this->measurement_mode_ == 1) {
-    // Clear stale ErrorStatus before triggering fresh measurement
+    // Single measurement mode: clear error, trigger, and return immediately.
+    // loop() handles waiting for completion and reading results.
     uint8_t clear_err = 0x00;
     this->write_register_(REG_CLEAR_ERROR_STATUS, &clear_err, 1);
 
-    // Single measurement mode: trigger and wait for result
-    if (!this->trigger_single_measurement_()) {
+    uint8_t cmd = 0x01;
+    if (!this->write_register_(REG_START_SINGLE, &cmd, 1)) {
+      ESP_LOGE(TAG, "Failed to trigger single measurement");
       this->status_set_warning("Single measurement failed");
       return;
     }
+
+    this->measurement_timeout_ms_ = 35 + (static_cast<uint32_t>(this->number_of_samples_) * 300) + 1500;
+    this->measurement_start_ = millis();
+    this->saw_nrdy_active_ = false;
+    this->state_ = SunriseState::WAIT_MEASUREMENT;
+    return;  // Non-blocking — loop() takes over from here
   }
 
+  // Continuous mode: sensor measures autonomously, just read the latest result
   this->read_and_publish_();
 }
 
