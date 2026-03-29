@@ -46,8 +46,9 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
 
   void background_calibration();
   void dump_registers();
-  void abc_enable();
-  void abc_disable();
+  bool abc_enable();
+  bool abc_disable();
+  bool is_abc_enabled() const { return this->abc_enabled_; }
 
  protected:
   bool wake_up_();
@@ -66,6 +67,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   bool iir_filter_{true};
   uint16_t abc_period_{0};  // 0 = not configured (use sensor default)
   uint16_t abc_target_{0};  // 0 = not configured (use sensor default)
+  bool abc_enabled_{true};  // tracks hardware state; true = ABC on (bit 1 clear)
   bool pressure_compensation_{false};
   sensor::Sensor *pressure_source_{nullptr};
   int16_t pressure_value_{0};  // static pressure in 0.1 hPa units, 0 = unused

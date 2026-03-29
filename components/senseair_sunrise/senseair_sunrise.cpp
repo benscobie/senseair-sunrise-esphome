@@ -251,6 +251,7 @@ void SenseairSunriseComponent::setup() {
   if (this->read_register_(0xA5, &meter_control, 1)) {
     this->nrdy_enabled_ = (meter_control & 0x01) == 0;
     this->nrdy_active_high_ = (meter_control & 0x20) != 0;
+    this->abc_enabled_ = (meter_control & 0x02) == 0;
     uint8_t desired = meter_control;
 
     // IIR filter bits 2-3
@@ -620,21 +621,22 @@ void SenseairSunriseComponent::dump_registers() {
   ESP_LOGI(TAG, "=== End register dump ===");
 }
 
-void SenseairSunriseComponent::abc_enable() {
+bool SenseairSunriseComponent::abc_enable() {
   ESP_LOGI(TAG, "Enabling ABC...");
   uint8_t meter_control;
   if (!this->read_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
-    return;
+    return false;
   }
   if (!(meter_control & 0x02)) {
     ESP_LOGI(TAG, "ABC is already enabled");
-    return;
+    this->abc_enabled_ = true;
+    return true;
   }
   meter_control &= ~0x02;
   if (!this->write_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
-    return;
+    return false;
   }
   delay(25);  // EEPROM write time for 006-0-0007
   // EEPROM-backed changes require a sensor reset (TDE7318)
@@ -644,24 +646,27 @@ void SenseairSunriseComponent::abc_enable() {
   } else {
     delay(50);  // T_Start typ 35 ms
   }
+  this->abc_enabled_ = true;
   ESP_LOGI(TAG, "ABC enabled (sensor reset)");
+  return true;
 }
 
-void SenseairSunriseComponent::abc_disable() {
+bool SenseairSunriseComponent::abc_disable() {
   ESP_LOGI(TAG, "Disabling ABC...");
   uint8_t meter_control;
   if (!this->read_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to read MeterControl register");
-    return;
+    return false;
   }
   if (meter_control & 0x02) {
     ESP_LOGI(TAG, "ABC is already disabled");
-    return;
+    this->abc_enabled_ = false;
+    return true;
   }
   meter_control |= 0x02;
   if (!this->write_register_(0xA5, &meter_control, 1)) {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
-    return;
+    return false;
   }
   delay(25);  // EEPROM write time for 006-0-0007
   // EEPROM-backed changes require a sensor reset (TDE7318)
@@ -671,7 +676,9 @@ void SenseairSunriseComponent::abc_disable() {
   } else {
     delay(50);  // T_Start typ 35 ms
   }
+  this->abc_enabled_ = false;
   ESP_LOGI(TAG, "ABC disabled (sensor reset)");
+  return true;
 }
 
 }  // namespace senseair_sunrise
