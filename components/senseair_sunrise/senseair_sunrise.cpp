@@ -408,7 +408,60 @@ void SenseairSunriseComponent::update() {
   this->read_and_publish_();
 }
 
-void SenseairSunriseComponent::loop() {}
+void SenseairSunriseComponent::loop() {
+  switch (this->state_) {
+    case SunriseState::IDLE:
+      return;
+
+    case SunriseState::WAIT_MEASUREMENT: {
+      // Check nRDY pin for measurement completion (active → inactive edge)
+      if (this->nrdy_pin_ != nullptr && this->nrdy_enabled_) {
+        bool pin_state = this->nrdy_pin_->digital_read();
+        if (pin_state == this->nrdy_active_high_) {
+          this->saw_nrdy_active_ = true;
+        } else if (this->saw_nrdy_active_) {
+          this->state_ = SunriseState::READ_RESULT;
+          return;
+        }
+      }
+
+      // Timeout — fall back to status register polling
+      if (millis() - this->measurement_start_ > this->measurement_timeout_ms_) {
+        if (this->nrdy_pin_ != nullptr && this->nrdy_enabled_) {
+          ESP_LOGW(TAG, "nRDY timeout after %ums (saw_active=%s); falling back to status polling",
+                   this->measurement_timeout_ms_,
+                   this->saw_nrdy_active_ ? "yes" : "no");
+        }
+        this->state_ = SunriseState::POLL_STATUS;
+        this->poll_start_ = millis();
+      }
+      return;
+    }
+
+    case SunriseState::POLL_STATUS: {
+      // Poll ErrorStatus register — bit 7 of LSB clears when measurement is ready
+      uint8_t status[2];
+      if (this->read_register_(REG_ERROR_STATUS, status, 2)) {
+        if ((status[1] & 0x80) == 0) {
+          this->state_ = SunriseState::READ_RESULT;
+          return;
+        }
+      }
+
+      if (millis() - this->poll_start_ > 1000) {
+        ESP_LOGE(TAG, "Timeout waiting for single measurement to complete");
+        this->status_set_warning("Single measurement timeout");
+        this->state_ = SunriseState::IDLE;
+      }
+      return;
+    }
+
+    case SunriseState::READ_RESULT:
+      this->read_and_publish_();
+      this->state_ = SunriseState::IDLE;
+      return;
+  }
+}
 
 void SenseairSunriseComponent::read_and_publish_() {
   // Read registers 0x00 through 0x09 (10 bytes)
