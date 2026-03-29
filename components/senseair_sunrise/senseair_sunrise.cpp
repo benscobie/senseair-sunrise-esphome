@@ -681,5 +681,22 @@ bool SenseairSunriseComponent::abc_disable() {
   return true;
 }
 
+#ifdef USE_SWITCH
+void SenseairSunriseABCSwitch::setup() {
+  this->publish_state(this->parent_->is_abc_enabled());
+}
+
+void SenseairSunriseABCSwitch::write_state(bool state) {
+  bool success = state ? this->parent_->abc_enable() : this->parent_->abc_disable();
+  if (success) {
+    this->publish_state(state);
+  }
+}
+
+void SenseairSunriseABCSwitch::dump_config() {
+  LOG_SWITCH("  ", "ABC", this);
+}
+#endif  // USE_SWITCH
+
 }  // namespace senseair_sunrise
 }  // namespace esphome

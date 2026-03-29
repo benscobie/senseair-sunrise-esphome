@@ -4,6 +4,9 @@
 #include "esphome/core/automation.h"
 #include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
+#ifdef USE_SWITCH
+#include "esphome/components/switch/switch.h"
+#endif
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/core/preferences.h"
 
@@ -115,6 +118,20 @@ template<typename... Ts> class ABCDisableAction : public Action<Ts...> {
  protected:
   SenseairSunriseComponent *parent_;
 };
+
+#ifdef USE_SWITCH
+class SenseairSunriseABCSwitch : public switch_::Switch, public Component {
+ public:
+  void set_parent(SenseairSunriseComponent *parent) { this->parent_ = parent; }
+  float get_setup_priority() const override { return setup_priority::DATA - 1.0f; }
+  void setup() override;
+  void dump_config() override;
+
+ protected:
+  void write_state(bool state) override;
+  SenseairSunriseComponent *parent_{nullptr};
+};
+#endif  // USE_SWITCH
 
 }  // namespace senseair_sunrise
 }  // namespace esphome
