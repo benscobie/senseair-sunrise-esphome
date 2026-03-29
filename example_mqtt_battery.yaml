@@ -39,6 +39,10 @@ esphome:
       - component.update: my_sunrise
       - wait_until:
           condition:
+            lambda: 'return id(my_co2).has_state();'
+          timeout: 10s
+      - wait_until:
+          condition:
             mqtt.connected:
           timeout: 8s
       - delay: 200ms  # allow time for the state update to flush
@@ -94,6 +98,7 @@ sensor:
   - platform: senseair_sunrise
     id: my_sunrise
     co2:
+      id: my_co2
       name: "CO2"
     temperature:
       name: "Sensor Temperature"
