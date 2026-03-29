@@ -405,6 +405,12 @@ void SenseairSunriseComponent::update() {
     }
   }
 
+  this->read_and_publish_();
+}
+
+void SenseairSunriseComponent::loop() {}
+
+void SenseairSunriseComponent::read_and_publish_() {
   // Read registers 0x00 through 0x09 (10 bytes)
   // 0x00-0x01: ErrorStatus
   // 0x02-0x05: Reserved
@@ -537,10 +543,6 @@ void SenseairSunriseComponent::update() {
 
   this->status_clear_warning();
 }
-
-void SenseairSunriseComponent::loop() {}
-
-void SenseairSunriseComponent::read_and_publish_() {}
 
 void SenseairSunriseComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Senseair Sunrise:");
