@@ -76,6 +76,12 @@ sensor:
     # altitude: 250                     # Altitude in meters (auto-converts to pressure)
     update_interval: 15s
 
+switch:
+  - platform: senseair_sunrise
+    senseair_sunrise_id: my_sunrise
+    abc:
+      name: "ABC"
+
 button:
   - platform: template
     name: "Dump Registers"
@@ -86,14 +92,4 @@ button:
     name: "Background Calibration"
     on_press:
       - senseair_sunrise.background_calibration:
-          id: my_sunrise
-  - platform: template
-    name: "Enable ABC"
-    on_press:
-      - senseair_sunrise.abc_enable:
-          id: my_sunrise
-  - platform: template
-    name: "Disable ABC"
-    on_press:
-      - senseair_sunrise.abc_disable:
           id: my_sunrise
