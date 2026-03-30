@@ -31,14 +31,11 @@ esphome:
       - component.update: my_sunrise
       - wait_until:
           condition:
-            lambda: 'return id(my_co2).has_state();'
-          timeout: 10s
-      - wait_until:
-          condition:
-            api.connected:
-              state_subscription_only: true
-          timeout: 8s
-      - delay: 200ms  # allow time for the state update to flush
+            and:
+              - lambda: 'return id(my_co2).has_state();'
+              - api.connected:
+          timeout: 30s
+      - delay: 3s  # allow time for API handshake + state subscription to complete
       - deep_sleep.enter: deep_sleep_ctrl
 
 esp8266:
@@ -71,7 +68,7 @@ ota:
 
 deep_sleep:
   id: deep_sleep_ctrl
-  sleep_duration: 10s
+  sleep_duration: 60s
 
 i2c:
   sda: D2

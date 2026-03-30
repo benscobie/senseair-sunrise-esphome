@@ -39,13 +39,11 @@ esphome:
       - component.update: my_sunrise
       - wait_until:
           condition:
-            lambda: 'return id(my_co2).has_state();'
-          timeout: 10s
-      - wait_until:
-          condition:
-            mqtt.connected:
-          timeout: 8s
-      - delay: 200ms  # allow time for the state update to flush
+            and:
+              - lambda: 'return id(my_co2).has_state();'
+              - mqtt.connected:
+          timeout: 30s
+      - delay: 1s  # MQTT publishes are near-instant
       - deep_sleep.enter: deep_sleep_ctrl
 
 esp8266:
@@ -75,20 +73,14 @@ mqtt:
   password: !secret mqtt_password   # optional
   reboot_timeout: 0s                # don't reboot waiting for MQTT when sleeping
   birth_message:
-    topic: sunrise-mqtt-battery/status
-    payload: online
-    retain: true
   will_message:
-    topic: sunrise-mqtt-battery/status
-    payload: offline
-    retain: true
 
 ota:
   - platform: esphome
 
 deep_sleep:
   id: deep_sleep_ctrl
-  sleep_duration: 10s
+  sleep_duration: 60s
 
 i2c:
   sda: D2
