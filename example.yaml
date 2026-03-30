@@ -5,7 +5,7 @@
 #   D1 Mini GND  → Pin 1 (GND), Pin 6 (COMSEL, selects I2C mode)
 #   D1 Mini D2   → Pin 4 (SDA)
 #   D1 Mini D1   → Pin 5 (SCL)
-#   Pin 7 (nRDY): leave floating (or wire to D5 for single mode, see example_battery.yaml)
+#   Pin 7 (nRDY): leave floating (or wire to D5 for single mode, see example_api_battery.yaml)
 #   Leave floating: Pin 8 (DVCC)
 #
 # For ESP32, change the board and I2C pins:
@@ -57,7 +57,7 @@ sensor:
       name: "CO2"
     temperature:
       name: "Sensor Temperature"
-    # measurement_mode: continuous  # default; see example_battery.yaml for single mode
+    # measurement_mode: continuous  # default; see example_api_battery.yaml for single mode
     #
     # Measurement tuning (optional):
     # number_of_samples: 8    # 1-1024, default 8. More samples = better accuracy, more power.

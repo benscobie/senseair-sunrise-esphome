@@ -38,7 +38,7 @@ For ESP32, use the appropriate I2C pins (e.g. GPIO21/GPIO22).
 Three example configs are included:
 
 - **[example.yaml](example.yaml)** — Continuous mode, ESPHome native API
-- **[example_battery.yaml](example_battery.yaml)** — Single mode + deep sleep, ESPHome native API
+- **[example_api_battery.yaml](example_api_battery.yaml)** — Single mode + deep sleep, ESPHome native API
 - **[example_mqtt_battery.yaml](example_mqtt_battery.yaml)** — Single mode + deep sleep, MQTT (for Home Assistant MQTT integration)
 
 Copy `secrets.yaml.example` to `secrets.yaml` and fill in your values before compiling.
