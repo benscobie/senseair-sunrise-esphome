@@ -37,6 +37,8 @@ esphome:
     priority: -100  # run after all components are set up
     then:
       - component.update: my_sunrise
+      # If the sensor is disconnected or has a persistent error, the ESP stays
+      # awake for the full timeout before entering deep sleep.
       - wait_until:
           condition:
             and:

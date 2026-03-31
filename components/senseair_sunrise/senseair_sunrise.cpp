@@ -61,6 +61,10 @@ bool SenseairSunriseComponent::read_register_(uint8_t reg, uint8_t *data, size_t
 }
 
 bool SenseairSunriseComponent::write_register_(uint8_t reg, const uint8_t *data, size_t len) {
+  if (len > 28) {
+    ESP_LOGE(TAG, "write_register_: len %u exceeds buffer", len);
+    return false;
+  }
   this->wake_up_();
   uint8_t buf[29];  // max: 28-byte state block + 1 register address
   buf[0] = reg;
@@ -74,10 +78,15 @@ bool SenseairSunriseComponent::write_register_(uint8_t reg, const uint8_t *data,
 }
 
 uint32_t SenseairSunriseComponent::compute_config_hash_() const {
-  uint32_t h = 0;
-  h = (h * 31) + this->measurement_mode_;
-  h = (h * 31) + (this->iir_filter_ ? 1 : 0);
-  h = (h * 31) + (this->pressure_compensation_ ? 1 : 0);
+  // FNV-1a over the config fields that invalidate saved sensor state
+  uint32_t h = 2166136261u;
+  auto feed = [&](uint8_t byte) {
+    h ^= byte;
+    h *= 16777619u;
+  };
+  feed(this->measurement_mode_);
+  feed(this->iir_filter_ ? 1 : 0);
+  feed(this->pressure_compensation_ ? 1 : 0);
   return h;
 }
 
@@ -93,6 +102,25 @@ uint32_t SenseairSunriseComponent::compute_state_crc_(const SunriseSavedState &s
   for (int i = 0; i < 4; i++)
     feed((state.config_hash >> (i * 8)) & 0xFF);
   return crc ^ 0xFFFFFFFF;
+}
+
+bool SenseairSunriseComponent::sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name) {
+  uint8_t data[2];
+  if (!this->read_register_(reg, data, 2))
+    return false;
+  uint16_t current = (uint16_t(data[0]) << 8) | data[1];
+  if (current == desired)
+    return true;
+  ESP_LOGI(TAG, "Updating %s: %u -> %u", name, current, desired);
+  data[0] = desired >> 8;
+  data[1] = desired & 0xFF;
+  if (!this->write_register_(reg, data, 2)) {
+    ESP_LOGE(TAG, "Failed to set %s", name);
+    return false;
+  }
+  needs_reset = true;
+  delay(25);  // wait for EEPROM write to complete
+  return true;
 }
 
 void SenseairSunriseComponent::setup() {
@@ -168,40 +196,10 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Sync number of samples (uint16, EEPROM)
-  uint8_t samples_data[2];
-  if (this->read_register_(REG_NUM_SAMPLES, samples_data, 2)) {
-    uint16_t current = (uint16_t(samples_data[0]) << 8) | samples_data[1];
-    if (current != this->number_of_samples_) {
-      ESP_LOGI(TAG, "Updating number of samples: %u -> %u", current, this->number_of_samples_);
-      samples_data[0] = this->number_of_samples_ >> 8;
-      samples_data[1] = this->number_of_samples_ & 0xFF;
-      if (!this->write_register_(REG_NUM_SAMPLES, samples_data, 2)) {
-        ESP_LOGE(TAG, "Failed to set number of samples");
-      } else {
-        needs_reset = true;
-      }
-      delay(25);  // wait for EEPROM write to complete
-    }
-  }
+  this->sync_eeprom_u16_(REG_NUM_SAMPLES, this->number_of_samples_, needs_reset, "number of samples");
 
   if (this->measurement_mode_ == 0) {
-    // Sync measurement period (uint16 seconds) — continuous mode only
-    uint8_t period_data[2];
-    if (this->read_register_(REG_MEASUREMENT_PERIOD, period_data, 2)) {
-      uint16_t current = (uint16_t(period_data[0]) << 8) | period_data[1];
-      if (current != this->measurement_period_) {
-        ESP_LOGI(TAG, "Updating measurement period: %us -> %us", current, this->measurement_period_);
-        period_data[0] = this->measurement_period_ >> 8;
-        period_data[1] = this->measurement_period_ & 0xFF;
-        if (!this->write_register_(REG_MEASUREMENT_PERIOD, period_data, 2)) {
-          ESP_LOGE(TAG, "Failed to set measurement period");
-        } else {
-          needs_reset = true;
-        }
-        delay(25);  // wait for EEPROM write to complete
-      }
-    }
+    this->sync_eeprom_u16_(REG_MEASUREMENT_PERIOD, this->measurement_period_, needs_reset, "measurement period");
   }
 
   // Sync MeterControl (EEPROM)
@@ -241,42 +239,12 @@ void SenseairSunriseComponent::setup() {
     }
   }
 
-  // Sync ABC period (uint16 hours, EEPROM)
   if (this->abc_period_ != 0) {
-    uint8_t abc_data[2];
-    if (this->read_register_(REG_ABC_PERIOD, abc_data, 2)) {
-      uint16_t current = (uint16_t(abc_data[0]) << 8) | abc_data[1];
-      if (current != this->abc_period_) {
-        ESP_LOGI(TAG, "Updating ABC period: %uh -> %uh", current, this->abc_period_);
-        abc_data[0] = this->abc_period_ >> 8;
-        abc_data[1] = this->abc_period_ & 0xFF;
-        if (!this->write_register_(REG_ABC_PERIOD, abc_data, 2)) {
-          ESP_LOGE(TAG, "Failed to set ABC period");
-        } else {
-          needs_reset = true;
-        }
-        delay(25);  // wait for EEPROM write to complete
-      }
-    }
+    this->sync_eeprom_u16_(REG_ABC_PERIOD, this->abc_period_, needs_reset, "ABC period");
   }
 
-  // Sync ABC target (uint16 ppm, EEPROM)
   if (this->abc_target_ != 0) {
-    uint8_t cal_data[2];
-    if (this->read_register_(REG_ABC_TARGET, cal_data, 2)) {
-      uint16_t current = (uint16_t(cal_data[0]) << 8) | cal_data[1];
-      if (current != this->abc_target_) {
-        ESP_LOGI(TAG, "Updating ABC target: %u ppm -> %u ppm", current, this->abc_target_);
-        cal_data[0] = this->abc_target_ >> 8;
-        cal_data[1] = this->abc_target_ & 0xFF;
-        if (!this->write_register_(REG_ABC_TARGET, cal_data, 2)) {
-          ESP_LOGE(TAG, "Failed to set ABC target");
-        } else {
-          needs_reset = true;
-        }
-        delay(25);  // wait for EEPROM write to complete
-      }
-    }
+    this->sync_eeprom_u16_(REG_ABC_TARGET, this->abc_target_, needs_reset, "ABC target");
     // Warn if target < 400 ppm and ABC is enabled (datasheet: may cause incorrect ABC operation)
     if (this->abc_target_ < 400 && this->abc_enabled_) {
       ESP_LOGW(TAG, "ABC target (%u ppm) is below 400 ppm with ABC enabled — "
@@ -633,7 +601,7 @@ void SenseairSunriseComponent::dump_registers() {
     {0x38, 6,  "38-3D fw_rev+id"},       // Firmware rev + sensor ID
     {0x81, 9,  "81-89 cal+abc_time"},    // CalStatus, CalCmd, CalTarget, MeasOverride, ABC time
     {0x8A, 8,  "8A-91 abc_params"},      // ABC parameter state
-    {0x93, 1,  "93 start_single"},       // Start single measurement
+    {0x93, 1,  "93 SCsingle"},            // Single-meas config (trigger is 0xC3 in mirror block)
     {0x95, 5,  "95-99 mode+timing"},     // Mode, period, samples
     {0x9A, 2,  "9A-9B abc_period"},      // ABC period
     {0x9E, 2,  "9E-9F abc_target"},      // ABC target
@@ -644,6 +612,10 @@ void SenseairSunriseComponent::dump_registers() {
   };
   for (auto &b : blocks) {
     uint8_t data[32];
+    if (b.len > sizeof(data)) {
+      ESP_LOGW(TAG, "  [%s]: block too large for buffer", b.label);
+      continue;
+    }
     if (this->read_register_(b.start, data, b.len)) {
       char hex[97];  // 32 bytes * 3 chars + null
       for (uint8_t i = 0; i < b.len; i++)
