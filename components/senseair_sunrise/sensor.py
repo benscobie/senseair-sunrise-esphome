@@ -1,21 +1,25 @@
-import math
 import logging
+import math
 
-import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome import automation, pins
+import esphome.codegen as cg
 from esphome.components import i2c, sensor
+import esphome.config_validation as cv
 from esphome.const import (
     CONF_CO2,
     CONF_ID,
     CONF_TEMPERATURE,
     DEVICE_CLASS_CARBON_DIOXIDE,
     DEVICE_CLASS_TEMPERATURE,
+    ICON_MOLECULE_CO2,
     STATE_CLASS_MEASUREMENT,
     UNIT_CELSIUS,
     UNIT_PARTS_PER_MILLION,
-    ICON_MOLECULE_CO2,
 )
+
+from . import SenseairSunriseComponent, senseair_sunrise_ns
+
+DEPENDENCIES = ["i2c"]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,10 +39,9 @@ MEASUREMENT_MODES = {
     "single": 1,
 }
 
-from . import senseair_sunrise_ns, SenseairSunriseComponent, CODEOWNERS, DEPENDENCIES
 
 def _min_measurement_period(samples):
-    """Minimum measurement period: ceil(samples * 0.3) rounded up to nearest even second."""
+    """Minimum measurement period: ceil(samples * 0.3) rounded up to even."""
     min_s = math.ceil(samples * 0.3)
     if min_s % 2 != 0:
         min_s += 1
@@ -48,7 +51,8 @@ def _min_measurement_period(samples):
 def _validate_tuning(config):
     # Validate pressure compensation options (mutually exclusive)
     pressure_opts = [
-        opt for opt in [CONF_PRESSURE_SOURCE, CONF_PRESSURE, CONF_ALTITUDE]
+        opt
+        for opt in [CONF_PRESSURE_SOURCE, CONF_PRESSURE, CONF_ALTITUDE]
         if opt in config
     ]
     if len(pressure_opts) > 1:

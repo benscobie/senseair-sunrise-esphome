@@ -6,31 +6,30 @@
 #include "esphome/core/application.h"
 #include "esphome/core/preferences.h"
 
-namespace esphome {
-namespace senseair_sunrise {
+namespace esphome::senseair_sunrise {
 
 static const char *const TAG = "senseair_sunrise";
 
 // Register addresses (TDE5531 register map)
-static constexpr uint8_t REG_ERROR_STATUS       = 0x00;
-static constexpr uint8_t REG_MEASUREMENT_COUNT   = 0x0D;
-static constexpr uint8_t REG_FIRMWARE_TYPE       = 0x2F;
-static constexpr uint8_t REG_FIRMWARE_REV        = 0x38;
-static constexpr uint8_t REG_SENSOR_ID           = 0x3A;
-static constexpr uint8_t REG_PRODUCT_CODE        = 0x70;
-static constexpr uint8_t REG_CAL_STATUS          = 0x81;
-static constexpr uint8_t REG_CAL_COMMAND         = 0x82;
-static constexpr uint8_t REG_MEASUREMENT_MODE    = 0x95;
-static constexpr uint8_t REG_MEASUREMENT_PERIOD  = 0x96;
-static constexpr uint8_t REG_NUM_SAMPLES         = 0x98;
-static constexpr uint8_t REG_ABC_PERIOD          = 0x9A;
-static constexpr uint8_t REG_CLEAR_ERROR_STATUS  = 0x9D;
-static constexpr uint8_t REG_ABC_TARGET          = 0x9E;
-static constexpr uint8_t REG_SENSOR_RESET        = 0xA3;
-static constexpr uint8_t REG_METER_CONTROL       = 0xA5;
-static constexpr uint8_t REG_START_SINGLE        = 0xC3;
-static constexpr uint8_t REG_STATE_BLOCK         = 0xC4;
-static constexpr uint8_t REG_BARO_PRESSURE       = 0xDC;
+static constexpr uint8_t REG_ERROR_STATUS = 0x00;
+static constexpr uint8_t REG_MEASUREMENT_COUNT = 0x0D;
+static constexpr uint8_t REG_FIRMWARE_TYPE = 0x2F;
+static constexpr uint8_t REG_FIRMWARE_REV = 0x38;
+static constexpr uint8_t REG_SENSOR_ID = 0x3A;
+static constexpr uint8_t REG_PRODUCT_CODE = 0x70;
+static constexpr uint8_t REG_CAL_STATUS = 0x81;
+static constexpr uint8_t REG_CAL_COMMAND = 0x82;
+static constexpr uint8_t REG_MEASUREMENT_MODE = 0x95;
+static constexpr uint8_t REG_MEASUREMENT_PERIOD = 0x96;
+static constexpr uint8_t REG_NUM_SAMPLES = 0x98;
+static constexpr uint8_t REG_ABC_PERIOD = 0x9A;
+static constexpr uint8_t REG_CLEAR_ERROR_STATUS = 0x9D;
+static constexpr uint8_t REG_ABC_TARGET = 0x9E;
+static constexpr uint8_t REG_SENSOR_RESET = 0xA3;
+static constexpr uint8_t REG_METER_CONTROL = 0xA5;
+static constexpr uint8_t REG_START_SINGLE = 0xC3;
+static constexpr uint8_t REG_STATE_BLOCK = 0xC4;
+static constexpr uint8_t REG_BARO_PRESSURE = 0xDC;
 
 // TDE5531: EEPROM writes take <25 ms on Sunrise 006-0-0002/0007 and <107 ms on
 // other models (e.g. 006-0-0008, Sunlight)
@@ -105,8 +104,8 @@ uint32_t SenseairSunriseComponent::compute_state_crc_(const SunriseSavedState &s
     for (int i = 0; i < 8; i++)
       crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
   };
-  for (size_t i = 0; i < sizeof(state.block); i++)
-    feed(state.block[i]);
+  for (uint8_t byte : state.block)
+    feed(byte);
   for (int i = 0; i < 4; i++)
     feed((state.config_hash >> (i * 8)) & 0xFF);
   return crc ^ 0xFFFFFFFF;
@@ -121,8 +120,7 @@ bool SenseairSunriseComponent::sync_eeprom_u16_(uint8_t reg, uint16_t desired, b
   if (current == desired)
     return true;
   if (current == also_accept) {
-    ESP_LOGD(TAG, "%s: sensor reports %u for configured %u (rounded by sensor), not rewriting", name, current,
-             desired);
+    ESP_LOGD(TAG, "%s: sensor reports %u for configured %u (rounded by sensor), not rewriting", name, current, desired);
     return true;
   }
   ESP_LOGI(TAG, "Updating %s: %u -> %u", name, current, desired);
@@ -164,8 +162,8 @@ void SenseairSunriseComponent::setup() {
   // Read sensor ID
   uint8_t id_data[4];
   if (this->read_register_(REG_SENSOR_ID, id_data, 4)) {
-    this->sensor_id_ = ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) |
-                       ((uint32_t) id_data[2] << 8) | id_data[3];
+    this->sensor_id_ =
+        ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) | ((uint32_t) id_data[2] << 8) | id_data[3];
     ESP_LOGI(TAG, "Sensor ID: %u", this->sensor_id_);
   }
 
@@ -176,8 +174,7 @@ void SenseairSunriseComponent::setup() {
   if (this->measurement_mode_ == 1) {
     this->state_pref_ = global_preferences->make_preference<SunriseSavedState>(fnv1_hash("senseair_sunrise_state"));
     uint32_t expected_config = this->compute_config_hash_();
-    if (this->state_pref_.load(&this->saved_state_) &&
-        this->saved_state_.config_hash == expected_config &&
+    if (this->state_pref_.load(&this->saved_state_) && this->saved_state_.config_hash == expected_config &&
         this->saved_state_.crc == this->compute_state_crc_(this->saved_state_)) {
       this->state_valid_ = true;
       ESP_LOGD(TAG, "Loaded saved sensor state from preferences");
@@ -202,8 +199,8 @@ void SenseairSunriseComponent::setup() {
   uint8_t meas_mode;
   if (this->read_register_(REG_MEASUREMENT_MODE, &meas_mode, 1)) {
     if (meas_mode != this->measurement_mode_) {
-      ESP_LOGW(TAG, "Sensor measurement mode (%d) differs from configured mode (%d), updating sensor EEPROM",
-               meas_mode, this->measurement_mode_);
+      ESP_LOGW(TAG, "Sensor measurement mode (%d) differs from configured mode (%d), updating sensor EEPROM", meas_mode,
+               this->measurement_mode_);
       if (!this->write_register_(REG_MEASUREMENT_MODE, &this->measurement_mode_, 1)) {
         ESP_LOGE(TAG, "Failed to set measurement mode");
       } else {
@@ -217,8 +214,7 @@ void SenseairSunriseComponent::setup() {
   // even and values below 2 up to 2. Accept that value so we don't rewrite
   // EEPROM on every boot.
   uint16_t rounded_samples = this->number_of_samples_ < 2 ? 2 : (this->number_of_samples_ & ~1u);
-  this->sync_eeprom_u16_(REG_NUM_SAMPLES, this->number_of_samples_, needs_reset, "number of samples",
-                         rounded_samples);
+  this->sync_eeprom_u16_(REG_NUM_SAMPLES, this->number_of_samples_, needs_reset, "number of samples", rounded_samples);
 
   if (this->measurement_mode_ == 0) {
     this->sync_eeprom_u16_(REG_MEASUREMENT_PERIOD, this->measurement_period_, needs_reset, "measurement period");
@@ -240,14 +236,14 @@ void SenseairSunriseComponent::setup() {
     if (this->iir_filter_) {
       desired &= ~0x0C;  // clear bits 2+3 (enable both filters)
     } else {
-      desired |= 0x0C;   // set bits 2+3 (disable both filters)
+      desired |= 0x0C;  // set bits 2+3 (disable both filters)
     }
 
     // Pressure compensation bit 4
     if (this->pressure_compensation_) {
       desired &= ~0x10;  // clear bit 4 (enable pressure compensation)
     } else {
-      desired |= 0x10;   // set bit 4 (disable pressure compensation)
+      desired |= 0x10;  // set bit 4 (disable pressure compensation)
     }
 
     if (desired != meter_control) {
@@ -282,8 +278,9 @@ void SenseairSunriseComponent::setup() {
     this->sync_eeprom_u16_(REG_ABC_TARGET, this->abc_target_, needs_reset, "ABC target");
     // Warn if target < 400 ppm and ABC is enabled (datasheet: may cause incorrect ABC operation)
     if (this->abc_target_ < 400 && this->abc_enabled_) {
-      ESP_LOGW(TAG, "ABC target (%u ppm) is below 400 ppm with ABC enabled — "
-                    "this may cause incorrect ABC operation (see Senseair datasheet)",
+      ESP_LOGW(TAG,
+               "ABC target (%u ppm) is below 400 ppm with ABC enabled — "
+               "this may cause incorrect ABC operation (see Senseair datasheet)",
                this->abc_target_);
     }
   }
@@ -352,10 +349,7 @@ void SenseairSunriseComponent::update() {
       }
       int16_t pressure = static_cast<int16_t>(lroundf(raw));
       ESP_LOGV(TAG, "Writing pressure %d (0.1 hPa)", pressure);
-      uint8_t pressure_data[2] = {
-        static_cast<uint8_t>((pressure >> 8) & 0xFF),
-        static_cast<uint8_t>(pressure & 0xFF)
-      };
+      uint8_t pressure_data[2] = {static_cast<uint8_t>((pressure >> 8) & 0xFF), static_cast<uint8_t>(pressure & 0xFF)};
       if (!this->write_register_(REG_BARO_PRESSURE, pressure_data, 2)) {
         ESP_LOGW(TAG, "Failed to write pressure compensation value");
       }
@@ -418,8 +412,7 @@ void SenseairSunriseComponent::loop() {
       if (millis() - this->measurement_start_ > this->measurement_timeout_ms_) {
         if (this->nrdy_pin_ != nullptr && this->nrdy_enabled_) {
           ESP_LOGW(TAG, "nRDY timeout after %ums (saw_active=%s); falling back to status polling",
-                   this->measurement_timeout_ms_,
-                   this->saw_nrdy_active_ ? "yes" : "no");
+                   this->measurement_timeout_ms_, this->saw_nrdy_active_ ? "yes" : "no");
         }
         this->state_ = SunriseState::POLL_STATUS;
         this->poll_start_ = millis();
@@ -628,8 +621,7 @@ void SenseairSunriseComponent::dump_config() {
     if (this->pressure_source_ != nullptr) {
       ESP_LOGCONFIG(TAG, "  Pressure Compensation: enabled (dynamic sensor)");
     } else {
-      ESP_LOGCONFIG(TAG, "  Pressure Compensation: enabled (%.1f hPa)",
-                    this->pressure_value_ / 10.0f);
+      ESP_LOGCONFIG(TAG, "  Pressure Compensation: enabled (%.1f hPa)", this->pressure_value_ / 10.0f);
     }
   } else {
     ESP_LOGCONFIG(TAG, "  Pressure Compensation: disabled");
@@ -714,21 +706,25 @@ void SenseairSunriseComponent::check_calibration_result_(uint8_t measurement_cou
 void SenseairSunriseComponent::dump_registers() {
   ESP_LOGI(TAG, "=== Register dump ===");
   // Read in blocks matching the TDE5531 register map
-  struct { uint8_t start; uint8_t len; const char *label; } blocks[] = {
-    {0x00, 16, "00-0F status+meas"},    // ErrorStatus, CO2, temp, count, cycle
-    {0x10, 6,  "10-15 unfilt/filt"},     // Unfiltered/filtered concentrations
-    {0x2F, 1,  "2F fw_type"},            // Firmware type
-    {0x38, 6,  "38-3D fw_rev+id"},       // Firmware rev + sensor ID
-    {0x81, 9,  "81-89 cal+abc_time"},    // CalStatus, CalCmd, CalTarget, MeasOverride, ABC time
-    {0x8A, 8,  "8A-91 abc_params"},      // ABC parameter state
-    {0x93, 1,  "93 SCsingle"},            // Single-meas config (trigger is 0xC3 in mirror block)
-    {0x95, 5,  "95-99 mode+timing"},     // Mode, period, samples
-    {0x9A, 2,  "9A-9B abc_period"},      // ABC period
-    {0x9E, 2,  "9E-9F abc_target"},      // ABC target
-    {0xA1, 1,  "A1 iir_param"},          // IIR filter parameter
-    {0xA5, 1,  "A5 meter_ctrl"},         // MeterControl
-    {0xA7, 5,  "A7-AB addr+scale"},      // Address + scale factors
-    {0xC0, 32, "C0-DF mirror_block"},    // Full mirror/state block
+  struct {
+    uint8_t start;
+    uint8_t len;
+    const char *label;
+  } blocks[] = {
+      {0x00, 16, "00-0F status+meas"},   // ErrorStatus, CO2, temp, count, cycle
+      {0x10, 6, "10-15 unfilt/filt"},    // Unfiltered/filtered concentrations
+      {0x2F, 1, "2F fw_type"},           // Firmware type
+      {0x38, 6, "38-3D fw_rev+id"},      // Firmware rev + sensor ID
+      {0x81, 9, "81-89 cal+abc_time"},   // CalStatus, CalCmd, CalTarget, MeasOverride, ABC time
+      {0x8A, 8, "8A-91 abc_params"},     // ABC parameter state
+      {0x93, 1, "93 SCsingle"},          // Single-meas config (trigger is 0xC3 in mirror block)
+      {0x95, 5, "95-99 mode+timing"},    // Mode, period, samples
+      {0x9A, 2, "9A-9B abc_period"},     // ABC period
+      {0x9E, 2, "9E-9F abc_target"},     // ABC target
+      {0xA1, 1, "A1 iir_param"},         // IIR filter parameter
+      {0xA5, 1, "A5 meter_ctrl"},        // MeterControl
+      {0xA7, 5, "A7-AB addr+scale"},     // Address + scale factors
+      {0xC0, 32, "C0-DF mirror_block"},  // Full mirror/state block
   };
   for (auto &b : blocks) {
     uint8_t data[32];
@@ -819,9 +815,7 @@ bool SenseairSunriseComponent::abc_enable() { return this->abc_set_(true); }
 bool SenseairSunriseComponent::abc_disable() { return this->abc_set_(false); }
 
 #ifdef USE_SWITCH
-void SenseairSunriseABCSwitch::setup() {
-  this->publish_state(this->parent_->is_abc_enabled());
-}
+void SenseairSunriseABCSwitch::setup() { this->publish_state(this->parent_->is_abc_enabled()); }
 
 void SenseairSunriseABCSwitch::write_state(bool state) {
   bool success = state ? this->parent_->abc_enable() : this->parent_->abc_disable();
@@ -830,10 +824,7 @@ void SenseairSunriseABCSwitch::write_state(bool state) {
   }
 }
 
-void SenseairSunriseABCSwitch::dump_config() {
-  LOG_SWITCH("  ", "ABC", this);
-}
+void SenseairSunriseABCSwitch::dump_config() { LOG_SWITCH("  ", "ABC", this); }
 #endif  // USE_SWITCH
 
-}  // namespace senseair_sunrise
-}  // namespace esphome
+}  // namespace esphome::senseair_sunrise

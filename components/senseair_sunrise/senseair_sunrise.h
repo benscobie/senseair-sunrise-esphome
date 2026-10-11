@@ -10,8 +10,7 @@
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/core/preferences.h"
 
-namespace esphome {
-namespace senseair_sunrise {
+namespace esphome::senseair_sunrise {
 
 // Sensor algorithm state preserved across sensor restarts in single-measurement
 // mode.  Covers registers 0xC4-0xDF:
@@ -21,16 +20,16 @@ namespace senseair_sunrise {
 //   0xDC-0xDD  barometric pressure (overwritten by explicit write each cycle)
 //   0xDE-0xDF  ABC barometric pressure
 struct SunriseSavedState {
-  uint8_t block[28];      // registers 0xC4-0xDF
-  uint32_t config_hash;   // fingerprint of sensor ID + settings that invalidate state
-  uint32_t crc;           // CRC32 over block[] + config_hash
+  uint8_t block[28];     // registers 0xC4-0xDF
+  uint32_t config_hash;  // fingerprint of sensor ID + settings that invalidate state
+  uint32_t crc;          // CRC32 over block[] + config_hash
 } __attribute__((packed));
 
 enum class SunriseState : uint8_t {
-  IDLE,               // No single-measurement in progress
-  WAIT_MEASUREMENT,   // Waiting for nRDY pin transition or timeout
-  POLL_STATUS,        // Polling ErrorStatus register as fallback
-  READ_RESULT,        // Measurement ready — read and publish
+  IDLE,              // No single-measurement in progress
+  WAIT_MEASUREMENT,  // Waiting for nRDY pin transition or timeout
+  POLL_STATUS,       // Polling ErrorStatus register as fallback
+  READ_RESULT,       // Measurement ready — read and publish
 };
 
 class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice {
@@ -66,8 +65,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void wake_up_();
   bool read_register_(uint8_t reg, uint8_t *data, size_t len);
   bool write_register_(uint8_t reg, const uint8_t *data, size_t len);
-  bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name,
-                        uint16_t also_accept);
+  bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name, uint16_t also_accept);
   bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name) {
     return this->sync_eeprom_u16_(reg, desired, needs_reset, name, desired);
   }
@@ -178,5 +176,4 @@ class SenseairSunriseABCSwitch : public switch_::Switch, public Component {
 };
 #endif  // USE_SWITCH
 
-}  // namespace senseair_sunrise
-}  // namespace esphome
+}  // namespace esphome::senseair_sunrise
