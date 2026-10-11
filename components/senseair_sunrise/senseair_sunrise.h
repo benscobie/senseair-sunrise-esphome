@@ -22,7 +22,7 @@ namespace senseair_sunrise {
 //   0xDE-0xDF  ABC barometric pressure
 struct SunriseSavedState {
   uint8_t block[28];      // registers 0xC4-0xDF
-  uint32_t config_hash;   // fingerprint of settings that invalidate state
+  uint32_t config_hash;   // fingerprint of sensor ID + settings that invalidate state
   uint32_t crc;           // CRC32 over block[] + config_hash
 } __attribute__((packed));
 
@@ -90,6 +90,8 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   bool pressure_compensation_{false};
   sensor::Sensor *pressure_source_{nullptr};
   int16_t pressure_value_{0};  // static pressure in 0.1 hPa units, 0 = unused
+
+  uint32_t sensor_id_{0};
 
   // Pending calibration: result is checked after the next completed measurement
   bool calibration_pending_{false};

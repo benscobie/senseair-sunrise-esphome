@@ -89,6 +89,8 @@ uint32_t SenseairSunriseComponent::compute_config_hash_() const {
     h ^= byte;
     h *= 16777619u;
   };
+  for (int i = 0; i < 4; i++)
+    feed((this->sensor_id_ >> (i * 8)) & 0xFF);  // state belongs to one physical sensor
   feed(this->measurement_mode_);
   feed(this->iir_filter_ ? 1 : 0);
   feed(this->pressure_compensation_ ? 1 : 0);
@@ -138,21 +140,6 @@ void SenseairSunriseComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Senseair Sunrise...");
   bool needs_reset = false;
 
-  // Initialize preference storage for single-measurement state preservation
-  if (this->measurement_mode_ == 1) {
-    this->state_pref_ = global_preferences->make_preference<SunriseSavedState>(fnv1_hash("senseair_sunrise_state"));
-    uint32_t expected_config = this->compute_config_hash_();
-    if (this->state_pref_.load(&this->saved_state_) &&
-        this->saved_state_.config_hash == expected_config &&
-        this->saved_state_.crc == this->compute_state_crc_(this->saved_state_)) {
-      this->state_valid_ = true;
-      ESP_LOGD(TAG, "Loaded saved sensor state from preferences");
-    } else {
-      this->state_valid_ = false;
-      ESP_LOGD(TAG, "No valid saved sensor state (first cycle, config change, or corrupt)");
-    }
-  }
-
   if (this->nrdy_pin_ != nullptr) {
     this->nrdy_pin_->setup();
   }
@@ -176,9 +163,27 @@ void SenseairSunriseComponent::setup() {
   // Read sensor ID
   uint8_t id_data[4];
   if (this->read_register_(REG_SENSOR_ID, id_data, 4)) {
-    uint32_t sensor_id = ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) |
-                         ((uint32_t) id_data[2] << 8) | id_data[3];
-    ESP_LOGI(TAG, "Sensor ID: %u", sensor_id);
+    this->sensor_id_ = ((uint32_t) id_data[0] << 24) | ((uint32_t) id_data[1] << 16) |
+                       ((uint32_t) id_data[2] << 8) | id_data[3];
+    ESP_LOGI(TAG, "Sensor ID: %u", this->sensor_id_);
+  }
+
+  // Load state saved for single-measurement mode. Saved state is tied to the
+  // sensor ID, so a swapped sensor never receives another sensor's ABC/filter
+  // state. On ESP8266 preferences live in RTC memory unless restore_from_flash
+  // is set: they survive deep sleep but not a power loss.
+  if (this->measurement_mode_ == 1) {
+    this->state_pref_ = global_preferences->make_preference<SunriseSavedState>(fnv1_hash("senseair_sunrise_state"));
+    uint32_t expected_config = this->compute_config_hash_();
+    if (this->state_pref_.load(&this->saved_state_) &&
+        this->saved_state_.config_hash == expected_config &&
+        this->saved_state_.crc == this->compute_state_crc_(this->saved_state_)) {
+      this->state_valid_ = true;
+      ESP_LOGD(TAG, "Loaded saved sensor state from preferences");
+    } else {
+      this->state_valid_ = false;
+      ESP_LOGD(TAG, "No valid saved sensor state (first cycle, config or sensor change, or corrupt)");
+    }
   }
 
   // Read product code (16-byte ASCII string, requires firmware 4.08+)
