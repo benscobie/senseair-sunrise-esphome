@@ -110,6 +110,8 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   uint32_t poll_start_{0};
   uint32_t last_poll_attempt_ms_{0};
   bool saw_nrdy_active_{false};
+  bool have_trigger_count_{false};
+  uint8_t trigger_count_{0};  // measurement count read just before triggering
 
   void read_and_publish_();
 

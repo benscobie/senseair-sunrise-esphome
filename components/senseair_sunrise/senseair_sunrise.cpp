@@ -368,6 +368,11 @@ void SenseairSunriseComponent::update() {
     uint8_t clear_err = 0x00;
     this->write_register_(REG_CLEAR_ERROR_STATUS, &clear_err, 1);
 
+    // Remember the measurement count so completion can be detected by the
+    // count changing (ErrorStatus bit 7 only clears after the first
+    // measurement since sensor startup, so it is not a per-measurement flag).
+    this->have_trigger_count_ = this->read_register_(REG_MEASUREMENT_COUNT, &this->trigger_count_, 1);
+
     uint8_t cmd = 0x01;
     if (!this->write_register_(REG_START_SINGLE, &cmd, 1)) {
       ESP_LOGE(TAG, "Failed to trigger single measurement");
@@ -375,7 +380,12 @@ void SenseairSunriseComponent::update() {
       return;
     }
 
-    this->measurement_timeout_ms_ = 35 + (static_cast<uint32_t>(this->number_of_samples_) * 300) + 1500;
+    // With nRDY, wait for its edge up to the worst case plus margin. Without
+    // it, start polling once the samples should be done (TDE5531: 300 ms max
+    // per sample, i.e. 2.4 s for the default 8 samples).
+    uint32_t worst_case_ms = 35 + static_cast<uint32_t>(this->number_of_samples_) * 300;
+    bool use_nrdy = this->nrdy_pin_ != nullptr && this->nrdy_enabled_;
+    this->measurement_timeout_ms_ = use_nrdy ? worst_case_ms + 1500 : worst_case_ms;
     this->measurement_start_ = millis();
     this->saw_nrdy_active_ = false;
     this->state_ = SunriseState::WAIT_MEASUREMENT;
@@ -418,19 +428,31 @@ void SenseairSunriseComponent::loop() {
     }
 
     case SunriseState::POLL_STATUS: {
-      if (millis() - this->poll_start_ > 1000) {
+      if (millis() - this->poll_start_ > 2000) {
         ESP_LOGE(TAG, "Timeout waiting for single measurement to complete");
         this->status_set_warning("Single measurement timeout");
         this->state_ = SunriseState::IDLE;
         return;
       }
 
-      // Rate-limit I2C polling to avoid bus contention (~50ms between reads)
-      if (millis() - this->last_poll_attempt_ms_ < 50)
+      // Rate-limit I2C polling to avoid bus contention (~100ms between reads)
+      if (millis() - this->last_poll_attempt_ms_ < 100)
         return;
       this->last_poll_attempt_ms_ = millis();
 
-      // Poll ErrorStatus register — bit 7 of LSB clears when measurement is ready
+      if (this->have_trigger_count_) {
+        // Measurement count increments when the measurement completes
+        uint8_t count;
+        if (this->read_register_(REG_MEASUREMENT_COUNT, &count, 1) && count != this->trigger_count_) {
+          ESP_LOGV(TAG, "Measurement complete (count %u -> %u) after %ums", this->trigger_count_, count,
+                   millis() - this->measurement_start_);
+          this->state_ = SunriseState::READ_RESULT;
+        }
+        return;
+      }
+
+      // Fallback: ErrorStatus LSB bit 7 clears after the first measurement
+      // since sensor startup
       uint8_t status[2];
       if (this->read_register_(REG_ERROR_STATUS, status, 2)) {
         if ((status[1] & 0x80) == 0) {
