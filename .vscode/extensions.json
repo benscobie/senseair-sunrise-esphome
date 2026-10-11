@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "esphome.esphome-vscode",
+    "ms-vscode.cpptools",
+    "xaver.clang-format"
+  ]
+}
