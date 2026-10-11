@@ -528,10 +528,12 @@ void SenseairSunriseComponent::read_and_publish_() {
   if (error_lsb & 0x10) {
     ESP_LOGE(TAG, "Self-diagnostics error");
   }
-  // LSB bit 5: Out of range
+  // LSB bit 5: Out of range (concentration, temperature or pressure outside
+  // the sensor's range). The filtered value also averages in the bad sample,
+  // so don't publish it.
   if (error_lsb & 0x20) {
     ESP_LOGW(TAG, "Measurement out of range");
-    // Still publish -- reading may be approximate
+    skip_reading = true;
   }
   // LSB bit 6: Memory error
   if (error_lsb & 0x40) {
