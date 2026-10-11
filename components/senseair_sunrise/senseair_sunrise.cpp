@@ -410,13 +410,15 @@ void SenseairSunriseComponent::loop() {
 }
 
 void SenseairSunriseComponent::read_and_publish_() {
-  // Read registers 0x00 through 0x09 (10 bytes)
+  // Read registers 0x00 through 0x0D (14 bytes)
   // 0x00-0x01: ErrorStatus
   // 0x02-0x05: Reserved
   // 0x06-0x07: CO2 filtered + pressure compensated (signed 16-bit, ppm)
   // 0x08-0x09: Temperature (signed 16-bit, degC * 100)
-  uint8_t data[10];
-  if (!this->read_register_(REG_ERROR_STATUS, data, 10)) {
+  // 0x0A-0x0C: Reserved
+  // 0x0D:      Measurement count
+  uint8_t data[14];
+  if (!this->read_register_(REG_ERROR_STATUS, data, 14)) {
     ESP_LOGW(TAG, "Failed to read sensor data");
     this->status_set_warning("Communication failed");
     return;
@@ -432,6 +434,8 @@ void SenseairSunriseComponent::read_and_publish_() {
     ESP_LOGD(TAG, "No measurement completed yet, skipping");
     return;
   }
+
+  this->check_calibration_result_(data[13]);
 
   // MSB bit 0: Low internal regulated voltage
   if (error_msb & 0x01) {
@@ -579,32 +583,71 @@ void SenseairSunriseComponent::dump_config() {
 }
 
 void SenseairSunriseComponent::background_calibration() {
-  ESP_LOGI(TAG, "Initiating background calibration...");
-  // Step 1: Clear CalibrationStatus before starting (TDE5531 recommendation)
+  // Calibrates against the ABC target (fresh air, 400 ppm by default)
+  this->start_calibration_(0x7C06, 0x20, "Background calibration");
+}
+
+void SenseairSunriseComponent::restore_factory_calibration() {
+  this->start_calibration_(0x7C02, 0x04, "Factory calibration restore");
+}
+
+void SenseairSunriseComponent::start_calibration_(uint16_t command, uint8_t success_mask, const char *name) {
+  // TDE5531: the sensor calibrates on the first measurement after it receives
+  // the command, so the result can only be checked once a new measurement has
+  // completed. In single mode the host must trigger that measurement.
+  if (this->measurement_mode_ == 1 && this->state_ != SunriseState::IDLE) {
+    ESP_LOGW(TAG, "%s not started: a measurement is in progress, try again", name);
+    return;
+  }
+
+  uint8_t count;
+  if (!this->read_register_(REG_MEASUREMENT_COUNT, &count, 1)) {
+    ESP_LOGE(TAG, "%s not started: failed to read measurement count", name);
+    return;
+  }
+
+  ESP_LOGI(TAG, "Starting %s...", name);
+  // Clear CalibrationStatus before starting (TDE5531 recommendation)
   uint8_t clear = 0x00;
   if (!this->write_register_(REG_CAL_STATUS, &clear, 1)) {
     ESP_LOGW(TAG, "Failed to clear CalibrationStatus");
   }
-  // Step 2: Write calibration command 0x7C06
-  uint8_t cmd[2] = {0x7C, 0x06};
+  uint8_t cmd[2] = {static_cast<uint8_t>(command >> 8), static_cast<uint8_t>(command & 0xFF)};
   if (!this->write_register_(REG_CAL_COMMAND, cmd, 2)) {
-    ESP_LOGE(TAG, "Failed to send background calibration command");
+    ESP_LOGE(TAG, "Failed to send %s command", name);
     return;
   }
-  // Step 3: Read back CalibrationStatus to verify (TDE5531 example)
-  delay(50);
-  uint8_t status;
-  if (this->read_register_(REG_CAL_STATUS, &status, 1)) {
-    if (status & 0x20) {
-      ESP_LOGI(TAG, "Background calibration successful (status=0x%02X)", status);
-    } else {
-      ESP_LOGW(TAG, "Background calibration status: 0x%02X (expected bit 5 set)", status);
-    }
+
+  this->calibration_pending_ = true;
+  this->calibration_mask_ = success_mask;
+  this->calibration_count_ = count;
+  this->calibration_name_ = name;
+
+  if (this->measurement_mode_ == 1) {
+    ESP_LOGI(TAG, "%s: triggering a measurement to apply it", name);
+    this->update();
   } else {
-    ESP_LOGW(TAG, "Failed to read CalibrationStatus after calibration");
+    ESP_LOGI(TAG, "%s: result will be checked after the next measurement", name);
   }
 }
 
+void SenseairSunriseComponent::check_calibration_result_(uint8_t measurement_count) {
+  if (!this->calibration_pending_ || measurement_count == this->calibration_count_)
+    return;  // nothing pending, or no new measurement since the command
+  this->calibration_pending_ = false;
+
+  uint8_t status;
+  if (!this->read_register_(REG_CAL_STATUS, &status, 1)) {
+    ESP_LOGW(TAG, "%s: failed to read CalibrationStatus", this->calibration_name_);
+    return;
+  }
+  if (status & this->calibration_mask_) {
+    ESP_LOGI(TAG, "%s succeeded (CalibrationStatus=0x%02X)", this->calibration_name_, status);
+  } else {
+    ESP_LOGW(TAG, "%s failed (CalibrationStatus=0x%02X, expected 0x%02X); ensure a stable environment",
+             this->calibration_name_, status, this->calibration_mask_);
+  }
+}
 
 void SenseairSunriseComponent::dump_registers() {
   ESP_LOGI(TAG, "=== Register dump ===");

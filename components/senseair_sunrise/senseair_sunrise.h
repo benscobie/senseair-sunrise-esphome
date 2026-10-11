@@ -56,6 +56,7 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void set_pressure_value(int16_t value) { this->pressure_value_ = value; }
 
   void background_calibration();
+  void restore_factory_calibration();
   void dump_registers();
   bool abc_enable();
   bool abc_disable();
@@ -71,6 +72,8 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
     return this->sync_eeprom_u16_(reg, desired, needs_reset, name, desired);
   }
   bool abc_set_(bool enable);
+  void start_calibration_(uint16_t command, uint8_t success_mask, const char *name);
+  void check_calibration_result_(uint8_t measurement_count);
 
   sensor::Sensor *co2_sensor_{nullptr};
   sensor::Sensor *temperature_sensor_{nullptr};
@@ -87,6 +90,12 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   bool pressure_compensation_{false};
   sensor::Sensor *pressure_source_{nullptr};
   int16_t pressure_value_{0};  // static pressure in 0.1 hPa units, 0 = unused
+
+  // Pending calibration: result is checked after the next completed measurement
+  bool calibration_pending_{false};
+  uint8_t calibration_mask_{0};
+  uint8_t calibration_count_{0};  // measurement count when the command was sent
+  const char *calibration_name_{""};
 
   ESPPreferenceObject state_pref_;
   bool state_valid_{false};
@@ -110,6 +119,15 @@ template<typename... Ts> class BackgroundCalibrationAction : public Action<Ts...
  public:
   BackgroundCalibrationAction(SenseairSunriseComponent *parent) : parent_(parent) {}
   void play(const Ts &...x) override { this->parent_->background_calibration(); }
+
+ protected:
+  SenseairSunriseComponent *parent_;
+};
+
+template<typename... Ts> class FactoryCalibrationAction : public Action<Ts...> {
+ public:
+  FactoryCalibrationAction(SenseairSunriseComponent *parent) : parent_(parent) {}
+  void play(const Ts &...x) override { this->parent_->restore_factory_calibration(); }
 
  protected:
   SenseairSunriseComponent *parent_;

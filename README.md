@@ -100,7 +100,8 @@ switch:
 
 Available for use in automations:
 
-- `senseair_sunrise.background_calibration` — Zero-point calibration (requires clean air)
+- `senseair_sunrise.background_calibration` — Calibrate against the ABC target (default 400 ppm); place the sensor in fresh air first. The result is logged after the next measurement (in single mode the action triggers that measurement)
+- `senseair_sunrise.restore_factory_calibration` — Restore the factory calibration, discarding any user calibration and resetting the ABC baseline
 - `senseair_sunrise.abc_enable` / `senseair_sunrise.abc_disable` — Toggle ABC
 - `senseair_sunrise.dump_registers` — Log all sensor registers (diagnostics)
 

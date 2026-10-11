@@ -181,6 +181,9 @@ CONFIG_SCHEMA = cv.All(
 BackgroundCalibrationAction = senseair_sunrise_ns.class_(
     "BackgroundCalibrationAction", automation.Action
 )
+FactoryCalibrationAction = senseair_sunrise_ns.class_(
+    "FactoryCalibrationAction", automation.Action
+)
 DumpRegistersAction = senseair_sunrise_ns.class_(
     "DumpRegistersAction", automation.Action
 )
@@ -201,6 +204,12 @@ SENSEAIR_SUNRISE_ACTION_SCHEMA = automation.maybe_simple_id(
 @automation.register_action(
     "senseair_sunrise.background_calibration",
     BackgroundCalibrationAction,
+    SENSEAIR_SUNRISE_ACTION_SCHEMA,
+    synchronous=True,
+)
+@automation.register_action(
+    "senseair_sunrise.restore_factory_calibration",
+    FactoryCalibrationAction,
     SENSEAIR_SUNRISE_ACTION_SCHEMA,
     synchronous=True,
 )
