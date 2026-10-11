@@ -66,8 +66,8 @@ sensor:
     # iir_filter: true        # Auto-disabled if measurement_period > 60s.
     #                         # For periods > 60s: disable IIR and increase samples (e.g. 32).
     # abc_period: 180h        # ABC auto-calibration period (default 180h / 7.5 days).
-    #                         # Shorter (e.g. 192h = 8d) for well-ventilated spaces,
-    #                         # longer for stable or confined environments.
+    #                         # TDE7318 suggests about 8 days (192h) so the period
+    #                         # includes low-occupancy times with fresh air.
     # abc_target: 400  # ABC/background calibration baseline (350-2000 ppm).
     #
     # Pressure compensation (optional, pick one):
@@ -88,8 +88,18 @@ button:
     on_press:
       - senseair_sunrise.dump_registers:
           id: my_sunrise
+  # Place the sensor in fresh outdoor air (~400 ppm) before pressing: the
+  # current concentration becomes the ABC target baseline. The result is
+  # logged after the next measurement.
   - platform: template
     name: "Background Calibration"
     on_press:
       - senseair_sunrise.background_calibration:
+          id: my_sunrise
+  # Recovery after a bad calibration: restores the factory calibration and
+  # resets the ABC baseline.
+  - platform: template
+    name: "Restore Factory Calibration"
+    on_press:
+      - senseair_sunrise.restore_factory_calibration:
           id: my_sunrise
