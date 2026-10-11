@@ -1,0 +1,15 @@
+---
+extends: default
+
+ignore: |
+  .esphome/
+  .venv/
+
+rules:
+  # ESPHome configs are YAML 1.1 with on/off keys and no document start marker.
+  document-start: disable
+  truthy: disable
+  line-length:
+    max: 120
+  comments:
+    min-spaces-from-content: 1

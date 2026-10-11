@@ -1,3 +1,7 @@
 __pycache__/
 .esphome/
+.pytest_cache/
+.ruff_cache/
 secrets.yaml
+.venv/
+compile_commands.json

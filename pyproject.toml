@@ -1,0 +1,67 @@
+[project]
+name = "senseair-sunrise"
+version = "0.0.0"
+requires-python = ">=3.12,<3.15"
+
+# Not a distributable package: this only describes the dev environment for uv.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+  "esphome==2026.9.1",
+  "prek==0.5.5",
+  "pytest==9.1.1",
+  "ruff==0.17.0",
+  "clang-format==13.0.1",
+  "clang-tidy==22.1.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: tests that invoke external tools (esphome CLI)"]
+
+# Lint rules mirror ESPHome's own pyproject.toml so the component reads like upstream code.
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "B",    # flake8-bugbear
+  "BLE",  # flake8-blind-except
+  "C4",   # flake8-comprehensions
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "FLY",  # flynt
+  "FURB", # refurb
+  "G",    # flake8-logging-format
+  "I",    # isort
+  "ISC",  # flake8-implicit-str-concat
+  "LOG",  # flake8-logging
+  "PERF", # performance
+  "PIE",  # flake8-pie
+  "PL",   # pylint
+  "PTH",  # flake8-use-pathlib
+  "RET",  # flake8-return
+  "RSE",  # flake8-raise
+  "SIM",  # flake8-simplify
+  "T10",  # flake8-debugger
+  "UP",   # pyupgrade
+  "W",    # pycodestyle warnings
+]
+ignore = [
+  "E501",    # line too long (the formatter handles it)
+  "PLC0415", # import not at top level
+  "PLR0911", # too many return statements
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments
+  "PLR0915", # too many statements
+  "PLR2004", # magic value used in comparison
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["esphome"]
+combine-as-imports = true
+split-on-trailing-comma = false

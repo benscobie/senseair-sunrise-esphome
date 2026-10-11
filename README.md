@@ -113,6 +113,21 @@ Available for use in automations:
 
 Source: [senseair.com/product/sunrise](https://senseair.com/product/sunrise/)
 
+## Development
+
+The usual ESPHome component tooling: pre-commit hooks running ruff, clang-format and yamllint, with ESPHome's `.clang-format` and `.clang-tidy`. [uv](https://docs.astral.sh/uv/) manages a venv with ESPHome and the tools pinned in `pyproject.toml`/`uv.lock`.
+
+```sh
+uv sync                                     # create .venv with the pinned ESPHome and tools
+uv run prek install                         # install the git hooks (pre-commit works too)
+
+uv run prek run --all-files                 # lint and format everything
+uv run pytest -m "not slow"                 # unit tests
+uv run pytest -m slow                       # validate every example*.yaml with `esphome config`
+uv run esphome compile example.yaml         # full compile
+uv run python script/clang_tidy.py [--fix]  # clang-tidy; compile example.yaml first
+```
+
 ## License
 
 [MIT](LICENSE)

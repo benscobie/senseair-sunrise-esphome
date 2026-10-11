@@ -1,9 +1,8 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import switch
-from esphome.const import CONF_ID
+import esphome.config_validation as cv
 
-from . import senseair_sunrise_ns, SenseairSunriseComponent
+from . import SenseairSunriseComponent, senseair_sunrise_ns
 
 CONF_ABC = "abc"
 CONF_SENSEAIR_SUNRISE_ID = "senseair_sunrise_id"
@@ -14,9 +13,7 @@ SenseairSunriseABCSwitch = senseair_sunrise_ns.class_(
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(CONF_SENSEAIR_SUNRISE_ID): cv.use_id(
-            SenseairSunriseComponent
-        ),
+        cv.GenerateID(CONF_SENSEAIR_SUNRISE_ID): cv.use_id(SenseairSunriseComponent),
         cv.Optional(CONF_ABC): switch.switch_schema(
             SenseairSunriseABCSwitch,
         ),

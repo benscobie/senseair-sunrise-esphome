@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":automergeLinters",
+    ":timezone(Europe/London)"
+  ],
+  "automergeType": "branch",
+  "platformAutomerge": false,
+  "rebaseWhen": "behind-base-branch",
+  "automergeStrategy": "squash",
+  "branchPrefix": "renovate-",
+  "digest": {
+    "automerge": true
+  },
+  "pre-commit": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Keep the ruff pin in pyproject.toml and the pre-commit hook in step",
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
+      "groupName": "ruff"
+    },
+    {
+      "description": "clang-format stays on the version ESPHome uses so formatting matches upstream",
+      "matchPackageNames": ["clang-format", "pre-commit/mirrors-clang-format"],
+      "enabled": false
+    }
+  ]
+}

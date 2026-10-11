@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    # renovate-* branches automerge without a PR, so CI has to run on the push.
+    branches: [main, "renovate-*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204  # v3.0.1
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Unit tests and example config validation
+        run: uv run pytest
+
+  compile:
+    name: compile (${{ matrix.config }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - example.yaml
+          - example_api_battery.yaml
+          - example_mqtt_battery.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.config }}-${{ hashFiles('uv.lock', matrix.config) }}
+          restore-keys: pio-
+
+      - name: Create dummy secrets
+        run: |
+          cat > secrets.yaml <<'EOF'
+          wifi_ssid: "test"
+          wifi_password: "testtest"
+          esphome_api_key: "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
+          mqtt_broker: "127.0.0.1"
+          mqtt_username: "test"
+          mqtt_password: "test"
+          EOF
+
+      - run: uv run esphome compile ${{ matrix.config }}
+
+      # clang-tidy only needs one build's flags; every example uses the same ESP8266 target.
+      - if: matrix.config == 'example.yaml'
+        run: uv run python script/clang_tidy.py example.yaml
