@@ -31,6 +31,10 @@ static constexpr uint8_t REG_START_SINGLE        = 0xC3;
 static constexpr uint8_t REG_STATE_BLOCK         = 0xC4;
 static constexpr uint8_t REG_BARO_PRESSURE       = 0xDC;
 
+// TDE5531: EEPROM writes take <25 ms on Sunrise 006-0-0002/0007 and <107 ms on
+// other models (e.g. 006-0-0008, Sunlight)
+static constexpr uint32_t EEPROM_WRITE_DELAY_MS = 110;
+
 void SenseairSunriseComponent::wake_up_() {
   // Wake sensor by sending its address on the bus. TDE5531 says any SDA
   // activity wakes the sensor from sleep; NACK is expected and harmless.
@@ -104,13 +108,19 @@ uint32_t SenseairSunriseComponent::compute_state_crc_(const SunriseSavedState &s
   return crc ^ 0xFFFFFFFF;
 }
 
-bool SenseairSunriseComponent::sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name) {
+bool SenseairSunriseComponent::sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name,
+                                                uint16_t also_accept) {
   uint8_t data[2];
   if (!this->read_register_(reg, data, 2))
     return false;
   uint16_t current = (uint16_t(data[0]) << 8) | data[1];
   if (current == desired)
     return true;
+  if (current == also_accept) {
+    ESP_LOGD(TAG, "%s: sensor reports %u for configured %u (rounded by sensor), not rewriting", name, current,
+             desired);
+    return true;
+  }
   ESP_LOGI(TAG, "Updating %s: %u -> %u", name, current, desired);
   data[0] = desired >> 8;
   data[1] = desired & 0xFF;
@@ -119,7 +129,7 @@ bool SenseairSunriseComponent::sync_eeprom_u16_(uint8_t reg, uint16_t desired, b
     return false;
   }
   needs_reset = true;
-  delay(25);  // wait for EEPROM write to complete
+  delay(EEPROM_WRITE_DELAY_MS);  // wait for EEPROM write to complete
   return true;
 }
 
@@ -192,11 +202,16 @@ void SenseairSunriseComponent::setup() {
       } else {
         needs_reset = true;
       }
-      delay(25);  // wait for EEPROM write to complete
+      delay(EEPROM_WRITE_DELAY_MS);  // wait for EEPROM write to complete
     }
   }
 
-  this->sync_eeprom_u16_(REG_NUM_SAMPLES, this->number_of_samples_, needs_reset, "number of samples");
+  // TDE5531: except on 006-0-0007, the sensor rounds odd sample counts down to
+  // even and values below 2 up to 2. Accept that value so we don't rewrite
+  // EEPROM on every boot.
+  uint16_t rounded_samples = this->number_of_samples_ < 2 ? 2 : (this->number_of_samples_ & ~1u);
+  this->sync_eeprom_u16_(REG_NUM_SAMPLES, this->number_of_samples_, needs_reset, "number of samples",
+                         rounded_samples);
 
   if (this->measurement_mode_ == 0) {
     this->sync_eeprom_u16_(REG_MEASUREMENT_PERIOD, this->measurement_period_, needs_reset, "measurement period");
@@ -235,7 +250,7 @@ void SenseairSunriseComponent::setup() {
       } else {
         needs_reset = true;
       }
-      delay(25);  // wait for EEPROM write to complete
+      delay(EEPROM_WRITE_DELAY_MS);  // wait for EEPROM write to complete
     }
   }
 
@@ -655,7 +670,7 @@ bool SenseairSunriseComponent::abc_set_(bool enable) {
     ESP_LOGE(TAG, "Failed to write MeterControl register");
     return false;
   }
-  delay(25);  // EEPROM write time for 006-0-0007
+  delay(EEPROM_WRITE_DELAY_MS);
 
   // EEPROM-backed changes require a sensor reset (TDE7318)
   uint8_t reset_cmd = 0xFF;

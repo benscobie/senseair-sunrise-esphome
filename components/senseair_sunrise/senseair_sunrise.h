@@ -65,7 +65,11 @@ class SenseairSunriseComponent : public PollingComponent, public i2c::I2CDevice 
   void wake_up_();
   bool read_register_(uint8_t reg, uint8_t *data, size_t len);
   bool write_register_(uint8_t reg, const uint8_t *data, size_t len);
-  bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name);
+  bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name,
+                        uint16_t also_accept);
+  bool sync_eeprom_u16_(uint8_t reg, uint16_t desired, bool &needs_reset, const char *name) {
+    return this->sync_eeprom_u16_(reg, desired, needs_reset, name, desired);
+  }
   bool abc_set_(bool enable);
 
   sensor::Sensor *co2_sensor_{nullptr};
