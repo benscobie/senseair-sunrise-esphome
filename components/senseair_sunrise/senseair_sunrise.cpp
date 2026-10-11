@@ -34,6 +34,7 @@ static constexpr uint8_t REG_BARO_PRESSURE       = 0xDC;
 // TDE5531: EEPROM writes take <25 ms on Sunrise 006-0-0002/0007 and <107 ms on
 // other models (e.g. 006-0-0008, Sunlight)
 static constexpr uint32_t EEPROM_WRITE_DELAY_MS = 110;
+static constexpr uint16_t ABC_PERIOD_DEFAULT_HOURS = 180;
 
 void SenseairSunriseComponent::wake_up_() {
   // Wake sensor by sending its address on the bus. TDE5531 says any SDA
@@ -256,6 +257,19 @@ void SenseairSunriseComponent::setup() {
 
   if (this->abc_period_ != 0) {
     this->sync_eeprom_u16_(REG_ABC_PERIOD, this->abc_period_, needs_reset, "ABC period");
+  }
+
+  // TDE5531: ABC only runs when MeterControl bit 1 is clear AND the period is
+  // 1-65534 (0 and 65535 disable it).
+  if (this->abc_enabled_) {
+    uint8_t period_data[2];
+    if (this->read_register_(REG_ABC_PERIOD, period_data, 2)) {
+      uint16_t period = (uint16_t(period_data[0]) << 8) | period_data[1];
+      if (period == 0 || period == 0xFFFF) {
+        ESP_LOGW(TAG, "ABC enabled in MeterControl but ABC period is %u, which disables ABC", period);
+        this->abc_enabled_ = false;
+      }
+    }
   }
 
   if (this->abc_target_ != 0) {
@@ -690,6 +704,29 @@ void SenseairSunriseComponent::dump_registers() {
 bool SenseairSunriseComponent::abc_set_(bool enable) {
   const char *label = enable ? "enable" : "disable";
   ESP_LOGI(TAG, "%s ABC...", enable ? "Enabling" : "Disabling");
+  bool changed = false;
+
+  // TDE5531: ABC also needs a period of 1-65534 hours; 0 and 65535 disable it
+  if (enable) {
+    uint8_t period_data[2];
+    if (!this->read_register_(REG_ABC_PERIOD, period_data, 2)) {
+      ESP_LOGE(TAG, "Failed to read ABC period");
+      return false;
+    }
+    uint16_t period = (uint16_t(period_data[0]) << 8) | period_data[1];
+    if (period == 0 || period == 0xFFFF) {
+      uint16_t desired = this->abc_period_ != 0 ? this->abc_period_ : ABC_PERIOD_DEFAULT_HOURS;
+      ESP_LOGI(TAG, "ABC period is %u (disables ABC), setting it to %u hours", period, desired);
+      period_data[0] = desired >> 8;
+      period_data[1] = desired & 0xFF;
+      if (!this->write_register_(REG_ABC_PERIOD, period_data, 2)) {
+        ESP_LOGE(TAG, "Failed to write ABC period");
+        return false;
+      }
+      delay(EEPROM_WRITE_DELAY_MS);
+      changed = true;
+    }
+  }
 
   uint8_t meter_control;
   if (!this->read_register_(REG_METER_CONTROL, &meter_control, 1)) {
@@ -698,24 +735,27 @@ bool SenseairSunriseComponent::abc_set_(bool enable) {
   }
 
   bool currently_enabled = !(meter_control & 0x02);
-  if (currently_enabled == enable) {
+  if (currently_enabled != enable) {
+    if (enable) {
+      meter_control &= ~0x02;
+    } else {
+      meter_control |= 0x02;
+    }
+    if (!this->write_register_(REG_METER_CONTROL, &meter_control, 1)) {
+      ESP_LOGE(TAG, "Failed to write MeterControl register");
+      return false;
+    }
+    delay(EEPROM_WRITE_DELAY_MS);
+    changed = true;
+  }
+
+  this->abc_enabled_ = enable;
+  if (!changed) {
     ESP_LOGI(TAG, "ABC is already %sd", label);
-    this->abc_enabled_ = enable;
     return true;
   }
 
-  if (enable) {
-    meter_control &= ~0x02;
-  } else {
-    meter_control |= 0x02;
-  }
-  if (!this->write_register_(REG_METER_CONTROL, &meter_control, 1)) {
-    ESP_LOGE(TAG, "Failed to write MeterControl register");
-    return false;
-  }
-  delay(EEPROM_WRITE_DELAY_MS);
-
-  // EEPROM-backed changes require a sensor reset (TDE7318)
+  // EEPROM-backed changes require a sensor reset (TDE5531)
   uint8_t reset_cmd = 0xFF;
   if (!this->write_register_(REG_SENSOR_RESET, &reset_cmd, 1)) {
     ESP_LOGW(TAG, "Failed to reset sensor after %s ABC", label);
@@ -723,7 +763,6 @@ bool SenseairSunriseComponent::abc_set_(bool enable) {
     delay(50);  // T_Start typ 35 ms
   }
 
-  this->abc_enabled_ = enable;
   ESP_LOGI(TAG, "ABC %sd (sensor reset)", label);
   return true;
 }
