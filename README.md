@@ -107,9 +107,9 @@ Available for use in automations:
 
 ## Vendor Documentation
 
-- [PSP11704 — I2C communication description](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Dev/publicerat/PSP11704.pdf)
-- [TDE5531 — I2C register description](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Dev/publicerat/TDE5531.pdf)
-- [TDE7318 — Sensor module description](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Market/publicerat/TDE7318.pdf)
+- [PSP11704 — Sunrise product specification](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Dev/publicerat/PSP11704.pdf)
+- [TDE5531 — I2C protocol and register description](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Dev/publicerat/TDE5531.pdf)
+- [TDE7318 — Customer integration guidelines](https://rmtplusstoragesenseair.blob.core.windows.net/docs/Market/publicerat/TDE7318.pdf)
 
 Source: [senseair.com/product/sunrise](https://senseair.com/product/sunrise/)
 
