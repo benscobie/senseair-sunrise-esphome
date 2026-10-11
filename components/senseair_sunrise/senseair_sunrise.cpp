@@ -302,12 +302,25 @@ void SenseairSunriseComponent::update() {
     return;
   }
 
-  // In single mode, restore saved ABC/filter state from previous cycle.
+  // In single mode, restore saved ABC/filter state only if the sensor lost it.
+  // ErrorStatus LSB bit 7 ("no measurement completed") is set at sensor
+  // startup and cleared after the first measurement (TDE5531), so it tells us
+  // whether the sensor restarted since its last measurement. If it did not
+  // (e.g. EN tied high and only the ESP slept), the sensor's live state is
+  // newer than our snapshot and must not be overwritten.
   // Must happen BEFORE pressure write and trigger (TDE5531 ordering).
   // Do NOT write state on the first cycle (no valid data yet).
   if (this->measurement_mode_ == 1 && this->state_valid_) {
-    if (!this->write_register_(REG_STATE_BLOCK, this->saved_state_.block, 28)) {
-      ESP_LOGW(TAG, "Failed to restore sensor state");
+    uint8_t status[2];
+    if (!this->read_register_(REG_ERROR_STATUS, status, 2)) {
+      ESP_LOGW(TAG, "Failed to read ErrorStatus, not restoring sensor state");
+    } else if (status[1] & 0x80) {
+      ESP_LOGD(TAG, "Sensor restarted since its last measurement, restoring saved state");
+      if (!this->write_register_(REG_STATE_BLOCK, this->saved_state_.block, 28)) {
+        ESP_LOGW(TAG, "Failed to restore sensor state");
+      }
+    } else {
+      ESP_LOGD(TAG, "Sensor kept its state since the last measurement, not restoring");
     }
   }
 
@@ -545,12 +558,13 @@ void SenseairSunriseComponent::read_and_publish_() {
     if (this->read_register_(REG_STATE_BLOCK, new_state.block, 28)) {
       new_state.config_hash = this->compute_config_hash_();
       new_state.crc = this->compute_state_crc_(new_state);
-      // Only write to flash if state actually changed (reduces flash wear)
+      // Only save if state actually changed (avoids flash wear with restore_from_flash)
       if (std::memcmp(&new_state, &this->saved_state_, sizeof(new_state)) != 0) {
         this->saved_state_ = new_state;
         this->state_valid_ = true;
+        ESP_LOGD(TAG, "Saved updated sensor state");
         if (!this->state_pref_.save(&this->saved_state_)) {
-          ESP_LOGW(TAG, "Failed to persist sensor state to flash");
+          ESP_LOGW(TAG, "Failed to save sensor state to preferences");
         }
       }
     } else {

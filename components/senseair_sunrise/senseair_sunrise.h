@@ -13,7 +13,7 @@
 namespace esphome {
 namespace senseair_sunrise {
 
-// Sensor algorithm state preserved across power cycles in single-measurement
+// Sensor algorithm state preserved across sensor restarts in single-measurement
 // mode.  Covers registers 0xC4-0xDF:
 //   0xC4-0xC5  ABC time
 //   0xC6-0xCD  ABC parameters
