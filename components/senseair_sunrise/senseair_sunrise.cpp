@@ -1,6 +1,7 @@
 #include "senseair_sunrise.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
+#include <cmath>
 #include <cstring>
 #include "esphome/core/application.h"
 #include "esphome/core/preferences.h"
@@ -331,20 +332,26 @@ void SenseairSunriseComponent::update() {
 
   // Write barometric pressure for compensation (RAM register, every cycle)
   if (this->pressure_compensation_) {
-    int16_t pressure = this->pressure_value_;  // static default
+    float pressure_hpa = this->pressure_value_ / 10.0f;  // static default
+    bool have_pressure = this->pressure_value_ != 0;
     if (this->pressure_source_ != nullptr) {
-      if (this->pressure_source_->has_state()) {
-        // Convert hPa to 0.1 hPa units
-        pressure = static_cast<int16_t>(this->pressure_source_->state * 10.0f);
+      have_pressure = this->pressure_source_->has_state() && !std::isnan(this->pressure_source_->state);
+      if (have_pressure) {
+        pressure_hpa = this->pressure_source_->state;
       } else {
-        ESP_LOGD(TAG, "Pressure source not ready, skipping pressure write");
-        pressure = 0;  // skip write
+        ESP_LOGD(TAG, "Pressure source has no valid value, skipping pressure write");
       }
     }
-    if (pressure != 0) {
-      // Clamp to valid range 3000-13000 (300-1300 hPa)
-      if (pressure < 3000) pressure = 3000;
-      if (pressure > 13000) pressure = 13000;
+    if (have_pressure) {
+      // Clamp to valid range 3000-13000 (300-1300 hPa) before converting, so
+      // out-of-range values cannot overflow int16
+      float raw = pressure_hpa * 10.0f;
+      if (raw < 3000.0f || raw > 13000.0f) {
+        ESP_LOGW(TAG, "Pressure %.1f hPa outside 300-1300 hPa, clamping", pressure_hpa);
+        raw = raw < 3000.0f ? 3000.0f : 13000.0f;
+      }
+      int16_t pressure = static_cast<int16_t>(lroundf(raw));
+      ESP_LOGV(TAG, "Writing pressure %d (0.1 hPa)", pressure);
       uint8_t pressure_data[2] = {
         static_cast<uint8_t>((pressure >> 8) & 0xFF),
         static_cast<uint8_t>(pressure & 0xFF)
