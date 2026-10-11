@@ -30,7 +30,7 @@ def ensure_secrets(tmp_path_factory):
     secrets.write_text(
         'wifi_ssid: "test"\n'
         'wifi_password: "testtest"\n'
-        'esphome_api_key: "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHQ="\n'
+        'esphome_api_key: "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="\n'
         'mqtt_broker: "127.0.0.1"\n'
         'mqtt_username: "test"\n'
         'mqtt_password: "test"\n'

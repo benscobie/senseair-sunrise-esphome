@@ -58,7 +58,7 @@ jobs:
           cat > secrets.yaml <<'EOF'
           wifi_ssid: "test"
           wifi_password: "testtest"
-          esphome_api_key: "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHQ="
+          esphome_api_key: "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHRlc3Q="
           mqtt_broker: "127.0.0.1"
           mqtt_username: "test"
           mqtt_password: "test"
