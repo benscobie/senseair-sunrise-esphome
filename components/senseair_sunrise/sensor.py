@@ -73,9 +73,9 @@ def _validate_tuning(config):
         if total_ms % 3600000 != 0:
             raise cv.Invalid("abc_period must be a whole number of hours")
         abc_hours = total_ms // 3600000
-        if abc_hours < 1 or abc_hours > 65535:
+        if abc_hours < 1 or abc_hours > 65534:  # 65535 disables ABC (TDE5531)
             raise cv.Invalid(
-                f"abc_period ({abc_hours}h) out of range. Must be 1h to 65535h"
+                f"abc_period ({abc_hours}h) out of range. Must be 1h to 65534h"
             )
         config[CONF_ABC_PERIOD] = abc_hours
 

@@ -71,7 +71,7 @@ sensor:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `abc_period` | sensor default | Recalibration interval (1h–65535h). |
+| `abc_period` | sensor default | Recalibration interval (1h–65534h). |
 | `abc_target` | sensor default | Reference CO2 level in ppm (350–2000). |
 
 ### Pressure compensation
