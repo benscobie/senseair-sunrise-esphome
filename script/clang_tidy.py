@@ -25,7 +25,25 @@ OMIT_FLAGS = {
     "-mlongcalls",
     "-mtext-section-literals",
     "-fno-tree-switch-conversion",
+    "-Winvalid-pch",
 }
+
+# ESPHome's precompiled header, force-included by a path relative to the
+# PlatformIO build dir. It only speeds up GCC builds, so clang-tidy skips it.
+PCH_HEADER = "esphome_pch.h"
+
+
+def strip_pch_include(flags: list[str]) -> list[str]:
+    result = []
+    it = iter(flags)
+    for flag in it:
+        if flag != "-include":
+            result.append(flag)
+            continue
+        header = next(it, None)
+        if header != PCH_HEADER:
+            result += [flag, header] if header is not None else [flag]
+    return result
 
 
 def load_idedata(yaml_file: str) -> dict:
@@ -65,7 +83,7 @@ def clang_args(idedata: dict, build_src: Path) -> list[str]:
     ]
     args += [
         flag
-        for flag in idedata["cxx_flags"]
+        for flag in strip_pch_include(idedata["cxx_flags"])
         if flag not in OMIT_FLAGS
         and not flag.startswith(("-Werror", "-std=", "-falign-functions"))
     ]
