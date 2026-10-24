@@ -1,7 +1,7 @@
 [project]
 name = "senseair-sunrise"
 version = "0.0.0"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.15,<3.16"
 
 # Not a distributable package: this only describes the dev environment for uv.
 [tool.uv]
