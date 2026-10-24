@@ -9,7 +9,7 @@ package = false
 
 [dependency-groups]
 dev = [
-  "esphome==2026.9.1",
+  "esphome==2026.10.0",
   "prek==0.5.5",
   "pytest==9.1.1",
   "ruff==0.17.0",
