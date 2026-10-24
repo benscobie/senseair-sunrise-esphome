@@ -26,6 +26,12 @@
       "description": "clang-format stays on the version ESPHome uses so formatting matches upstream",
       "matchPackageNames": ["clang-format", "pre-commit/mirrors-clang-format"],
       "enabled": false
+    },
+    {
+      "description": "requires-python tracks what ESPHome supports, so don't move it to the newest Python",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "enabled": false
     }
   ]
 }
